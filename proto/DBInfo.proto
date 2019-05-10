@@ -1,0 +1,23 @@
+syntax="proto3";
+package symdb;
+
+import "General.proto";
+
+message DB_ProjectInfo {
+    repeated string rel_paths = 1;
+}
+
+// rel_path -> FileDBInfo
+message DB_FileBasicInfo {
+    int64 last_mtime = 1;
+    string content_md5 = 2;
+}
+
+message DB_FileSymbolInfo {
+    repeated string symbols = 3;
+}
+
+message DB_SymbolInfo {
+    repeated PB_Location locations = 1;
+}
+
