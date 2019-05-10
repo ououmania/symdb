@@ -178,10 +178,7 @@ void Session::create_project(const uint8_t *buffer, size_t length)
     }
 
     try {
-        ProjectPtr project = ServerInst.CreateProject(proj_name, msg.home_dir());
-        if (project) {
-            project->Build();
-        }
+        ServerInst.CreateProject(proj_name, msg.home_dir());
     } catch (const std::exception &e) {
         LOG_ERROR << "exception " << e.what() << ", project=" << proj_name
                   << " home_dir=" << msg.home_dir();

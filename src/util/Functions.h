@@ -37,4 +37,12 @@ path_has_prefix(const boost::filesystem::path & path, const boost::filesystem::p
     return pair.second == prefix.end();
 }
 
+inline void
+replace_string(std::string &dest, const std::string &from, const std::string &to) {
+    auto pos = dest.find(from);
+    if (pos != std::string::npos) {
+        dest.replace(pos, from.size(), to);
+    }
+}
+
 } /* symutil  */

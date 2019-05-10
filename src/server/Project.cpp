@@ -127,7 +127,7 @@ ProjectPtr Project::CreateFromDatabase(const std::string &name) {
     }
 
     ProjectPtr project = std::make_shared<Project>(name);
-    project->Initialize(true);
+    project->Initialize(false);
     project->LoadProjectInfo();
 
     return project;
@@ -150,7 +150,6 @@ ProjectPtr Project::CreateFromConfig(const std::string &name, const std::string 
     ProjectPtr project = std::make_shared<Project>(name);
     project->Initialize(true);
     project->ChangeHome(home_dir);
-    project->Build();
 
     return project;
 }
@@ -181,16 +180,14 @@ void Project::Initialize(bool is_new) {
     StartForceSyncTimer();
 }
 
-void Project::ResetFileWatch() {
-    watchers_.clear();
+FsPathSet Project::GetAllSubDirs() {
+    fspath build_path = home_path_ / "_build";
+
+    FsPathSet sub_dirs;
 
     filesystem::recursive_directory_iterator rdi(home_path_);
     filesystem::recursive_directory_iterator end_rdi;
-
-    fspath build_path = home_path_ / "_build";
-
-    for (; rdi != end_rdi; ++rdi)
-    {
+    for (; rdi != end_rdi; ++rdi) {
         fspath abs_path;
         if (rdi->path().is_absolute()) {
             abs_path = rdi->path();
@@ -207,18 +204,67 @@ void Project::ResetFileWatch() {
             continue;
         }
 
-        auto module_name = GetModuleName(abs_path);
-        if (module_name.empty()) {
-            continue;
-        }
-
-        try {
-            WatcherPtr watcher { new ProjectFileWatcher { abs_path } };
-            watchers_[watcher->fd()] = std::move(watcher);
-        } catch (const std::exception &e) {
-        }
-        LOG_INFO << "project=" << proj_name_ << " watch_path=" << abs_path;
+        fspath relative_path = filesystem::relative(abs_path, home_path_);
+        sub_dirs.insert(relative_path);
     }
+
+    return sub_dirs;
+}
+
+void Project::AddFileWatch(const fspath &path) {
+    if (!path.is_absolute()) {
+        fspath abs_path = filesystem::absolute(path, home_path_);
+        return AddFileWatch(abs_path);
+    }
+
+    auto module_name = GetModuleName(path);
+    if (module_name.empty()) {
+        return;
+    }
+
+    try {
+        WatcherPtr watcher { new ProjectFileWatcher { path } };
+        watchers_[watcher->fd()] = std::move(watcher);
+        LOG_INFO << "project=" << proj_name_ << " watch_path=" << path;
+    } catch (const std::exception &e) {
+        LOG_ERROR << "excpetion: " << e.what() << " project="
+                  << proj_name_ << " watch_path=" << path;
+    }
+}
+
+void Project::RemoveFileWatch(const fspath &path) {
+    if (!path.is_absolute()) {
+        fspath abs_path = filesystem::absolute(path, home_path_);
+        return RemoveFileWatch(abs_path);
+    }
+
+    LOG_INFO << "project=" << proj_name_ << " path=" << path;
+
+    for (auto it = watchers_.begin(); it != watchers_.end(); ++it) {
+        if (it->second->abs_path() == path) {
+            watchers_.erase(it);
+            return;
+        }
+    }
+
+    LOG_INFO << "watch not added, project=" << proj_name_ << " path=" << path;
+}
+
+void Project::UpdateFileWatch() {
+    FsPathSet new_sub_dirs = GetAllSubDirs();
+    for (const auto &fs_path : new_sub_dirs) {
+        if (all_sub_dirs_.find(fs_path) == all_sub_dirs_.end()) {
+            AddFileWatch(fs_path);
+        }
+    }
+
+    for (const auto &fs_path : all_sub_dirs_) {
+        if (new_sub_dirs.find(fs_path) == new_sub_dirs.end()) {
+            RemoveFileWatch(fs_path);
+        }
+    }
+
+    all_sub_dirs_.swap(new_sub_dirs);
 
     LOG_DEBUG << "project=" << proj_name_ << " home=" << home_path_
               << " wd_size=" << watchers_.size();
@@ -253,14 +299,23 @@ void Project::BuildFile(const fspath &abs_path) {
         return;
     }
 
+    fspath relative_path = filesystem::relative(abs_path, home_path_);
+    if (in_parsing_files_.find(relative_path) != in_parsing_files_.end()) {
+        LOG_INFO << "file is in parsing, project=" << proj_name_
+                 << " relative_path=" << relative_path;
+        return;
+    }
+
     StringVecPtr compiler_flags = GetModuleCompilationFlag(module_name);
     if (!compiler_flags) {
         LOG_DEBUG << "module miss, name=" << module_name << " file=" << abs_path;
         return;
     }
 
+    in_parsing_files_.insert(relative_path);
+
     ServerInst.PostToWorker(std::bind(&Project::ClangParseFile,
-        shared_from_this(), abs_path.string(), compiler_flags, true));
+        shared_from_this(), home_path_, abs_path, compiler_flags));
 }
 
 void Project::ChangeHome(const std::string &new_home) {
@@ -304,42 +359,48 @@ void Project::ChangeHomeNoCheck(fspath &&new_path) {
     RebuildProject();
 }
 
-void Project::ClangParseFile(const std::string &filename,
-                             StringVecPtr compile_flags, bool is_build_proj) {
+void Project::ClangParseFile(const fspath &home_path,
+                             const fspath &abs_path,
+                             StringVecPtr compile_flags) {
     assert(!ServerInst.IsInMainThread());
 
-    TranslationUnit unit(filename, *compile_flags, cx_index_.get());
+    TranslationUnit unit(abs_path.string(), *compile_flags, cx_index_.get());
     unit.CollectSymbols();
 
-    if (is_build_proj) {
-        ServerInst.PostToMain(std::bind(&Project::OnParseCompleted,
-            shared_from_this(), filename, std::move(unit.defined_symbols())));
-    }
+    // We just tell the main thread the relative path so we can change the home
+    // easily even if the project is building.
+    fspath relative_path = filesystem::relative(abs_path, home_path);
+    ServerInst.PostToMain(std::bind(&Project::OnParseCompleted,
+        shared_from_this(), relative_path, std::move(unit.defined_symbols())));
 }
 
-void Project::OnParseCompleted(const std::string &filename,
+void Project::OnParseCompleted(const fspath &relative_path,
                                const SymbolMap &new_symbols) {
     assert(ServerInst.IsInMainThread());
 
-    static int file_count = 0;
+    fspath abs_path = filesystem::absolute(relative_path, home_path_);
+    if (in_parsing_files_.erase(relative_path) == 0) {
+        LOG_INFO << "path is not in built, project=" << proj_name_
+                 << " path=" << relative_path;
+    }
 
-    LOG_DEBUG << "parsed_file_count=" << ++file_count;
-
-    fspath abs_path(filename);
-
-    fspath relative_path = filesystem::relative(abs_path, home_path_);
+    if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
+        LOG_INFO << "path already deleted, project=" << proj_name_
+                 << " path=" << abs_path;
+        return;
+    }
 
     SymbolMap old_symbols;
-    (void) LoadFileSymbolInfo(relative_path.string(), old_symbols);
+    (void) LoadFileSymbolInfo(relative_path, old_symbols);
 
     leveldb::WriteBatch batch;
 
-    auto put_symbol = [this, &batch](const std::string &symbol, const Location &loc) {
+    auto put_symbol = [&](const std::string &symbol, const Location &loc) {
         auto symkey = MakeSymbolKey(symbol);
 
         DB_SymbolInfo st;
         if (LoadKeyPBValue(symkey, st)) {
-            Location sym_loc = GetSymbolLocation(st, symbol);
+            Location sym_loc = GetSymbolLocation(st, abs_path);
             if (sym_loc.IsValid()) {
                 LOG_DEBUG << "project=" << proj_name_ << " symbol=" << symbol
                           << " already exist:" << sym_loc;
@@ -364,7 +425,7 @@ void Project::OnParseCompleted(const std::string &filename,
             batch.Delete(symkey);
             is_symbol_changed = true;
         } else {
-            Location location = QuerySymbolDefinition(kv.first, filename);
+            Location location = QuerySymbolDefinition(kv.first, relative_path);
             if (!(location == it->second)) {
                 put_symbol(kv.first, location);
             }
@@ -411,10 +472,8 @@ void Project::OnParseCompleted(const std::string &filename,
     leveldb::Status s = symbol_db_->Write(write_options, &batch);
     if (!s.ok()) {
         LOG_ERROR << "failed to write, error=" << s.ToString() << " project="
-                  << proj_name_ << " file=" << filename;
+                  << proj_name_ << " file=" << relative_path;
     }
-
-    LOG_DEBUG << "file parsed, proj_name_=" << proj_name_ << " file=" << relative_path;
 }
 
 void Project::LoadProjectInfo() {
@@ -431,14 +490,14 @@ void Project::LoadProjectInfo() {
     LOG_DEBUG << "project=" << proj_name_ << ", home=" << home_dir;
 
     for (const auto &rel_path : db_info.rel_paths()) {
-        LOG_DEBUG << "file=" << rel_path;
+        LOG_DEBUG << "relative source file: " << rel_path;
         abs_src_paths_.insert(filesystem::absolute(rel_path, home_path_));
     }
 
     ChangeHomeNoCheck(home_dir);
 }
 
-bool Project::LoadFileSymbolInfo(const std::string &file_path, SymbolMap &symbols) const
+bool Project::LoadFileSymbolInfo(const fspath &file_path, SymbolMap &symbols) const
 {
     std::string file_key = MakeFileSymbolKey(file_path);
 
@@ -465,7 +524,6 @@ bool Project::GetSymbolDBInfo(const std::string &symbol, DB_SymbolInfo &st) cons
     std::string symbol_key = MakeSymbolKey(symbol);
 
     if (!LoadKeyPBValue(symbol_key, st)) {
-        LOG_ERROR << "failed to parse pb, project=" << proj_name_ << " symbol=" << symbol;
         return false;
     }
 
@@ -495,16 +553,14 @@ std::vector<Location> Project::QuerySymbolDefinition(const std::string &symbol) 
 // A symbol may appear more than once. Get the one match abs_path or the first
 // one if there's none.
 Location Project::QuerySymbolDefinition(const std::string &symbol,
-    const std::string &abs_path) const
+    const fspath &abs_path) const
 {
     DB_SymbolInfo db_info;
     if (!GetSymbolDBInfo(symbol, db_info)) {
         return Location {};
     }
 
-    fspath relative_path = filesystem::relative(abs_path, home_path_);
-
-    Location location = GetSymbolLocation(db_info, relative_path.string());
+    Location location = GetSymbolLocation(db_info, abs_path);
     if (location.IsValid()) {
         return location;
     }
@@ -537,7 +593,7 @@ std::string Project::MakeSymbolKey(const std::string &symbol_name) const
 
 Location Project::GetSymbolLocation(
     const DB_SymbolInfo &st,
-    const std::string &file_path) const
+    const fspath &file_path) const
 {
     std::string module_name = GetModuleName(file_path);
     if (module_name.empty()) {
@@ -662,8 +718,6 @@ void Project::HandleFileDeleted(int wd, const std::string &path)
 
     fspath fs_path = it->second->abs_path() / path;
 
-    LOG_DEBUG << "project=" << proj_name_ << ", path=" << fs_path;
-
     DeleteUnexistFile(fs_path);
 }
 
@@ -703,6 +757,20 @@ void Project::StartForceSyncTimer() {
 
 void Project::ForceSync() {
     StartForceSyncTimer();
+
+    FsPathSet old_abs_paths = abs_src_paths_;
+
+    BuildModuleFlags();
+
+    UpdateFileWatch();
+
+    for (const auto &abs_path : old_abs_paths) {
+        if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
+            DeleteUnexistFile(abs_path);
+        }
+    }
+
+    Build();
 }
 
 void Project::StartSmartSyncTimer() {
@@ -718,6 +786,8 @@ void Project::SmartSync() {
     std::sort(modified_files_.begin(), modified_files_.end());
     auto uq_it = std::unique(modified_files_.begin(), modified_files_.end());
     modified_files_.erase(uq_it, modified_files_.end());
+
+    if (modified_files_.empty()) return;
 
     LOG_DEBUG << "unique files=" << modified_files_.size();
 
@@ -749,8 +819,10 @@ void Project::RebuildFiles(FsPathVec &paths) {
 
 void Project::DeleteUnexistFile(const fspath &deleted_path)
 {
+    LOG_INFO << "project=" << proj_name_ << " deleted_path=" << deleted_path;
+
     if (filesystem::exists(deleted_path)) {
-        LOG_ERROR << "path still exists, project=" << proj_name_ << " paht="
+        LOG_ERROR << "path still exists, project=" << proj_name_ << " path="
                   << deleted_path;
         return;
     }
@@ -760,6 +832,9 @@ void Project::DeleteUnexistFile(const fspath &deleted_path)
                  << " path=" << deleted_path;
         return;
     }
+
+    fspath relative_path = filesystem::relative(deleted_path, home_path_);
+    in_parsing_files_.erase(relative_path);
 
     BatchWriter batch { this };
 
@@ -826,34 +901,29 @@ void Project::BuildModuleFlags() {
     }
 
     fspath build_path { tmp_dir };
-    fspath cmake_json_path = build_path / "compile_commands.json";
-    if (!filesystem::exists(cmake_json_path)) {
-        THROW_AT_FILE_LINE("compile_commands.json not exist");
-    }
 
-    LoadModuleCompilationFlag(build_path);
+    LoadCmakeCompilationInfo(build_path);
     /*CXCompilationDatabase_Error status;
     auto database = clang_CompilationDatabase_fromDirectory(
                             build_path.c_str(),
                             &status );
     if (status == CXCompilationDatabase_NoError) {
         RawPointerWrap<CXCompilationDatabase> guard { database, clang_CompilationDatabase_dispose };
-        LoadModuleCompilationFlag(build_path, database);
-        is_loaded_.store(true);
+        LoadCmakeCompilationInfo(build_path, database);
     }*/
 }
 
 void Project::RebuildProject() {
     try {
         BuildModuleFlags();
-        ResetFileWatch();
+        UpdateFileWatch();
         Build();
     } catch (const std::exception &e) {
         LOG_ERROR << "BuildModuleFlags exception: " << e.what();
     }
 }
 
-void Project::LoadModuleCompilationFlag(const fspath &build_path)
+void Project::LoadCmakeCompilationInfo(const fspath &build_path)
 {
     fspath cmake_json_path = build_path / "compile_commands.json";
     if (!filesystem::exists(cmake_json_path)) {

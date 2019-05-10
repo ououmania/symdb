@@ -6,3 +6,5 @@
 !proto/*.proto
 !src/**/*.cpp
 !src/**/*.h
+!src/**/*.hpp
+!src/server/Config.xml

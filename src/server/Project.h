@@ -20,18 +20,13 @@ namespace symdb {
 
 namespace stdfs = boost::filesystem;
 using FsPathVec = std::vector<fspath>;
+using FsPathSet = std::set<fspath>;
 
 using SmartLevelDBPtr = std::unique_ptr< leveldb::DB >;
 using SmartCXIndex = RawPointerWrap<CXIndex>;
 
 class DB_SymbolInfo;
 class BatchWriter;
-
-struct ProjectSymbolInfo {
-    std::string rel_path;
-    int32_t line;
-    int32_t column;
-};
 
 struct ProjectFileInfo {
     time_t last_mtime;
@@ -78,11 +73,11 @@ public:
     void HandleFileModified(int wd, const std::string &path);
     void HandleFileDeleted(int wd, const std::string &path);
 
-    bool LoadFileSymbolInfo(const std::string &path, SymbolMap &symbols) const;
+    bool LoadFileSymbolInfo(const fspath &path, SymbolMap &symbols) const;
 
     std::vector<Location> QuerySymbolDefinition(const std::string &symbol) const;
 
-    Location QuerySymbolDefinition(const std::string &symbol, const std::string &abs_path) const;
+    Location QuerySymbolDefinition(const std::string &symbol, const fspath &abs_path) const;
 
     const fspath& home_path() const { return home_path_; }
 
@@ -95,10 +90,11 @@ private:
 
     void Initialize(bool is_new);
 
-    void ClangParseFile(const std::string &filename,
-        StringVecPtr compile_flags, bool is_build_proj);
+    void ClangParseFile(const fspath &home_path,
+                        const fspath &abs_path,
+                        StringVecPtr compile_flags);
 
-    void OnParseCompleted(const std::string &filename,
+    void OnParseCompleted(const fspath &relative_path,
                           const SymbolMap &new_symbols);
 
     std::string MakeFileInfoKey(const fspath &file_path) const;
@@ -120,11 +116,11 @@ private:
 
     std::string GetModuleName(const fspath &path) const;
 
-    Location GetSymbolLocation(const DB_SymbolInfo &st, const std::string &rel_path) const;
+    Location GetSymbolLocation(const DB_SymbolInfo &st, const fspath &rel_path) const;
 
     void BuildFile(const fspath &abs_path);
 
-    void ResetFileWatch();
+    void UpdateFileWatch();
 
     void StartForceSyncTimer();
     void StartSmartSyncTimer();
@@ -136,11 +132,16 @@ private:
     void DeleteUnexistFile(const fspath &deleted_path);
     void RebuildFiles(FsPathVec &paths);
 
-    void LoadModuleCompilationFlag(const fspath &build_path);
+    void LoadCmakeCompilationInfo(const fspath &build_path);
 
     void RebuildProject();
 
     void BuildModuleFlags();
+
+    FsPathSet GetAllSubDirs();
+
+    void AddFileWatch(const fspath &path);
+    void RemoveFileWatch(const fspath &path);
 
 private:
     std::string proj_name_;
@@ -148,7 +149,9 @@ private:
     fspath cmake_file_path_;
     SmartCXIndex cx_index_;
     SmartLevelDBPtr symbol_db_;
-    std::set<fspath> abs_src_paths_;
+    FsPathSet all_sub_dirs_;
+    FsPathSet abs_src_paths_;
+    FsPathSet in_parsing_files_; // relative path
     FsPathVec modified_files_;
     boost::asio::deadline_timer smart_sync_timer_;
     boost::asio::deadline_timer force_sync_timer_;
@@ -156,8 +159,7 @@ private:
 
     ModuleCompileFlagsMap module_flags_map_;
     RelativeDirModuleMap rel_dir_module_map_;
-    int64_t cmake_json_last_mtime_;
-    std::atomic<bool> is_loaded_;
+    int64_t cmake_file_last_mtime_;
     mutable std::shared_mutex module_mutex_;
 };
 

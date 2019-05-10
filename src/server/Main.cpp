@@ -2,7 +2,6 @@
 #include "Config.h"
 #include "Project.h"
 #include "util/Logger.h"
-#include "util/NetDefine.h"
 #include "util/Exceptions.h"
 #include <iostream>
 #include <fstream>
@@ -18,11 +17,10 @@ boost::program_options::variables_map ParseOption(int argc, char *argv[])
     using namespace boost::program_options;
     options_description desc{"program options"};
     desc.add_options()
-      ("help,h", "Help screen")
-      ("listen", value<std::string>()->default_value(symdb::kDefaultSockPath),
-                 "The unix domain socket path")
-      ("daemon", value<bool>()->default_value(false), "run as daemon")
-      ("log", value<std::string>()->default_value("symdb.log"), "Config file");
+      ("help,h", "print the help message")
+      ("config_file,c", value<std::string>()->default_value("Config.xml"),
+                 "the config file")
+      ("daemon", value<bool>()->default_value(false), "run as daemon");
 
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -50,10 +48,7 @@ int main(int argc, char *argv[])
 
     LOG_DEBUG << "program boots up";
 
-    auto path = var_map["listen"].as<std::string>();
-    LOG_DEBUG << "listen: " << path;
-
-    ServerInst.Run(path);
+    ServerInst.Run(ConfigInst.listen_path());
 
     return 0;
 }
