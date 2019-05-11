@@ -12,8 +12,6 @@
 namespace symdb
 {
 
-static const std::string kProtoGeneratedFilePattern = ".*\\.pb\\.(cc|h)$";
-
 inline std::string child_value_or_default(
     const pugi::xml_node &node,
     const char *child_name,
@@ -40,16 +38,59 @@ inline std::string child_value_or_throw(
 }
 
 RegexPattern::RegexPattern(const std::string &orig_pattern,
-                 const std::string &use_pattern)
-    : pattern { orig_pattern },
-      reg { std::regex(use_pattern) },
-      is_copied_from_global { false }
+                           const std::string &used_pattern,
+                           bool is_from_global)
+    : pattern_ { orig_pattern },
+      regex_ { std::regex(used_pattern) },
+      is_from_global_ { is_from_global }
 {
 }
 
-RegexPattern::RegexPattern(const std::string &the_pattern)
-    : RegexPattern(the_pattern, the_pattern)
+RegexPattern::RegexPattern(const std::string &the_pattern, bool is_from_global)
+    : RegexPattern(the_pattern, the_pattern, is_from_global)
 {
+}
+
+ProjectConfig::ProjectConfig(const std::string &name, const std::string &home)
+    : name_ { name }
+{
+    fspath tmp_path { home };
+    home_path_ = filesystem::canonical(tmp_path);
+}
+
+void ProjectConfig::SetBuildPath(std::string path) {
+    LOG_DEBUG << "project=" << name_ << " path=" << path;
+    symutil::replace_string(path, "{PROJECT_HOME}", home_path_.string());
+    fspath build_path { path };
+    boost::filesystem::create_directories(build_path);
+    build_path_ = filesystem::canonical(build_path, home_path_);
+    LOG_DEBUG << "project=" << name_ << " final_build_path=" << build_path_;
+}
+
+void ProjectConfig::AddExcludePattern(const std::string &pattern) {
+    std::string used_pattern = pattern;
+    symutil::replace_string(used_pattern, "{PROJECT_HOME}", home_path_.string());
+    exclude_patterns_.push_back(RegexPattern { pattern, used_pattern });
+}
+
+void ProjectConfig::SpecializeGlobalPattern(const std::string &pattern) {
+    std::string used_pattern = pattern;
+    symutil::replace_string(used_pattern, "{PROJECT_HOME}", home_path_.string());
+    if (used_pattern != pattern) {
+        exclude_patterns_.push_back(RegexPattern { pattern, used_pattern, true });
+    } else {
+        LOG_ERROR << "no project info in pattern: " << pattern;
+    }
+}
+
+bool ProjectConfig::IsFileExcluded(const fspath &path) const {
+    for (const auto &rp : exclude_patterns_) {
+        if (std::regex_match(path.string(), rp.regex())) {
+            return true;
+        }
+    }
+
+    return ConfigInst.IsFileExcluded(path);
 }
 
 void Config::Init(const std::string &xml_file)
@@ -62,8 +103,8 @@ void Config::Init(const std::string &xml_file)
     }
 
     auto root_node = doc.child("Config");
-    log_path_ = child_value_or_throw(root_node, "LogDir");
-    db_path_ = child_value_or_throw(root_node, "DataDir");
+    log_path_ = symutil::expand_env(child_value_or_throw(root_node, "LogDir"));
+    db_path_ = symutil::expand_env(child_value_or_throw(root_node, "DataDir"));
     listen_path_ = child_value_or_default(root_node, "Listen", symdb::kDefaultSockPath);
 
     auto ensure_dir_exists = [](const std::string &dir) {
@@ -85,51 +126,43 @@ void Config::Init(const std::string &xml_file)
 
 void Config::InitGlobalExcludePattern(const pugi::xml_node &root_node)
 {
-    global_excluded_patterns_.push_back(RegexPattern(kProtoGeneratedFilePattern));
-    global_excluded_patterns_.push_back(RegexPattern(".*/build/.*"));
-
     auto global_exclude_entry = root_node.select_nodes("//GlobalExcluded/ExcludeEntry");
     for (const auto &entry : global_exclude_entry) {
         std::string pattern = entry.node().attribute("pattern").as_string();
         if (pattern.find("{PROJECT_HOME}") != std::string::npos) {
             global_project_patterns_.push_back(pattern);
         } else {
-            global_excluded_patterns_.push_back(RegexPattern {pattern});
+            global_excluded_patterns_.push_back(RegexPattern { pattern });
         }
     }
 }
 
 void Config::InitProjectsConfig(const pugi::xml_node &root)
 {
-    project_config_.clear();
+    projects_.clear();
 
     auto project_nodes = root.select_nodes("//Projects/Project");
-    project_config_.reserve(project_nodes.size());
+    projects_.reserve(project_nodes.size());
 
     for (const auto &proj : project_nodes) {
         const auto &node = proj.node();
-        ProjectConfigPtr pc = std::make_shared<ProjectConfig>();
-        pc->name = child_value_or_throw(node, "Name");
-        pc->home_path = child_value_or_throw(node, "Home");
+        auto name = child_value_or_throw(node, "Name");
+        auto home = child_value_or_throw(node, "Home");
+        auto expanded_home = symutil::expand_env(home);
+        ProjectConfigPtr pc = std::make_shared<ProjectConfig>(name, expanded_home);
         for (const auto &entry : node.children("ExcludeEntry")) {
             std::string cfg_pattern = entry.attribute("pattern").as_string();
-            std::string used_pattern = cfg_pattern;
-            symutil::replace_string(used_pattern, "{PROJECT_HOME}", pc->home_path);
-            pc->exclude_patterns.push_back(RegexPattern { cfg_pattern, used_pattern });
+            pc->AddExcludePattern(cfg_pattern);
         }
 
+        auto build_dir = child_value_or_default(node, "BuildDir", "_build");
+        pc->SetBuildPath(build_dir);
+
+        pc->is_enable_file_watch(node.child("EnableFileWatch").text().as_bool(true));
         for (const auto &pattern : global_project_patterns_) {
-            std::string used_pattern = pattern;
-            symutil::replace_string(used_pattern, "{PROJECT_HOME}", pc->home_path);
-            if (pattern == used_pattern) {
-                LOG_ERROR << "no project info in pattern: " << pattern;
-                continue;
-            }
-            RegexPattern rp { pattern, used_pattern };
-            rp.is_copied_from_global = true;
-            pc->exclude_patterns.push_back(rp);
+            pc->SpecializeGlobalPattern(pattern);
         }
-        project_config_.push_back(pc);
+        projects_.push_back(pc);
     }
 }
 
@@ -188,9 +221,7 @@ void Config::InitDefaultIncDirs(const pugi::xml_node &root)
 
 bool Config::IsFileExcluded(const fspath &path) const {
     for (const auto &rp : global_excluded_patterns_) {
-        bool is_matched = std::regex_match(path.string(), rp.reg);
-        LOG_DEBUG << "abs_path=" << path << " pattern=" << rp.pattern
-                  << " is_matched=" << is_matched;
+        bool is_matched = std::regex_match(path.string(), rp.regex());
         if (is_matched) {
             return true;
         }

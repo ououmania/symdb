@@ -49,6 +49,8 @@ void Server::Run(const std::string &listen_path)
         }
     );
 
+    LoadConfiguredProject();
+
     main_io_service_.run();
 }
 
@@ -85,9 +87,9 @@ ProjectPtr Server::CreateProject(const std::string &proj_name, const std::string
 
     ProjectPtr project;
     try {
-        project = Project::CreateFromConfig(proj_name, home_dir);
+        project = Project::CreateFromConfigFile(proj_name, home_dir);
     } catch (const std::exception &e) {
-        LOG_ERROR << "CreateFromConfig failed, proj_name=" << proj_name
+        LOG_ERROR << "CreateFromConfigFile failed, proj_name=" << proj_name
                   << ", error=" << e.what();
     }
 
@@ -121,14 +123,10 @@ void Server::HandleInotifyReadable()
     unsigned int avail;
     (void)ioctl(inotify_fd, FIONREAD, &avail);
 
-    LOG_DEBUG << "inotify_fd=" << inotify_fd << " avail=" << avail;
-
     char buffer[avail];
     read(inotify_fd, buffer, avail);
 
     for (decltype(avail) offset = 0; offset < avail; ) {
-        LOG_DEBUG << "offset=" << offset << " avail=" << avail;
-
         inotify_event *event = (inotify_event*)(buffer + offset);
 
         if (event->len == 0) {
@@ -177,6 +175,42 @@ void Server::HandleInotifyEvent(const inotify_event *event)
     if ((event->mask & IN_DELETE) == IN_DELETE) {
         project->HandleFileDeleted(event->wd, event->name);
     }
+}
+
+void Server::LoadConfiguredProject() {
+    for (auto cfg_ptr : ConfigInst.projects()) {
+        LOG_DEBUG << "project=" << cfg_ptr->name() << ", home="
+                  << cfg_ptr->home_path();
+        auto it = projects_.find(cfg_ptr->name());
+        if (it != projects_.end()) {
+            if (!filesystem::equivalent(it->second->home_path(), cfg_ptr->home_path())) {
+                THROW_AT_FILE_LINE("project<%s> with home<%s> already exists",
+                    cfg_ptr->name().c_str(), it->second->home_path().c_str());
+            }
+        }
+
+        ProjectPtr project;
+        try {
+            project = Project::CreateFromConfig(cfg_ptr);
+        } catch (const std::exception &e) {
+            LOG_ERROR << "CreateFromConfig failed, proj_name=" << cfg_ptr->name()
+                      << ", error=" << e.what();
+        }
+
+        if (project) {
+            AddProject(cfg_ptr->name(), project);
+        }
+    }
+}
+
+bool Server::IsServerRunning(const std::string &listen_path) {
+    boost::asio::io_service io_service;
+    boost::asio::local::stream_protocol::socket socket { io_service };
+    boost::system::error_code error;
+    socket.connect(listen_path, error);
+    io_service.run_one();
+
+    return !error && socket.is_open();
 }
 
 } // symdb

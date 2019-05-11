@@ -33,6 +33,9 @@ public:
     ProjectPtr CreateProject(const std::string &proj_name, const std::string &home_dir);
 
     asio::io_service& main_io_service() { return main_io_service_; }
+
+    int inotify_fd() const { return inotify_stream_->native_handle(); }
+
     template <class F>
     void PostToWorker(F f) {
         worker_io_service_.post(f);
@@ -47,9 +50,7 @@ public:
         return boost::this_thread::get_id() == main_thread_id_;
     }
 
-    int inotify_fd() const {
-        return inotify_stream_->native_handle();
-    }
+    static bool IsServerRunning(const std::string &listen_path);
 
 private:
     void AddProject(const std::string &proj_name, ProjectPtr ptr);
@@ -58,6 +59,8 @@ private:
     void HandleInotifyEvent(const inotify_event *event);
 
     ProjectPtr GetProjectByWatcher(int watch_fd);
+
+    void LoadConfiguredProject();
 
 private:
     Server() = default;

@@ -27,6 +27,7 @@ using SmartCXIndex = RawPointerWrap<CXIndex>;
 
 class DB_SymbolInfo;
 class BatchWriter;
+class ProjectConfig;
 
 struct ProjectFileInfo {
     time_t last_mtime;
@@ -61,14 +62,15 @@ class Project : public std::enable_shared_from_this<Project>
 
 public:
     static ProjectPtr CreateFromDatabase(const std::string &name);
-    static ProjectPtr CreateFromConfig(const std::string &name, const std::string &home_dir);
+    static ProjectPtr CreateFromConfigFile(const std::string &name, const fspath &home);
+    static ProjectPtr CreateFromConfig(std::shared_ptr<ProjectConfig> config);
 
     explicit Project(const std::string &name);
     ~Project() = default;
 
     void Build();
 
-    void ChangeHome(const std::string &new_home);
+    void ChangeHome(const fspath &new_home);
 
     void HandleFileModified(int wd, const std::string &path);
     void HandleFileDeleted(int wd, const std::string &path);
@@ -83,19 +85,22 @@ public:
 
     bool IsWatchFdInList(int file_wd) const;
 
+    void SetConfig(std::shared_ptr<ProjectConfig> config) {
+        config_ = config;
+    }
+
 private:
     void ChangeHomeNoCheck(fspath &&new_home);
 
     StringVecPtr GetModuleCompilationFlag(const std::string &module_name);
 
-    void Initialize(bool is_new);
+    void InitializeLevelDB(bool create_if_missing, bool error_if_exists);
 
-    void ClangParseFile(const fspath &home_path,
-                        const fspath &abs_path,
+    void ClangParseFile(fspath home_path,
+                        fspath abs_path,
                         StringVecPtr compile_flags);
 
-    void OnParseCompleted(const fspath &relative_path,
-                          const SymbolMap &new_symbols);
+    void OnParseCompleted(fspath relative_path, const SymbolMap &new_symbols);
 
     std::string MakeFileInfoKey(const fspath &file_path) const;
     std::string MakeFileSymbolKey(const fspath &file_rel_path) const;
@@ -106,7 +111,7 @@ private:
     template <typename PBType>
     bool LoadKeyPBValue(const std::string &key, PBType &pb) const;
 
-    void LoadProjectInfo();
+    bool LoadProjectInfo();
 
     bool PutSingleKey(const std::string &key, const std::string &value);
 
@@ -118,9 +123,12 @@ private:
 
     Location GetSymbolLocation(const DB_SymbolInfo &st, const fspath &rel_path) const;
 
+    void AddSymbolLocation(DB_SymbolInfo &st, const std::string &module_name, const Location &location);
+    bool RemoveSymbolLocation(DB_SymbolInfo &st, const std::string &module_name);
+
     void BuildFile(const fspath &abs_path);
 
-    void UpdateFileWatch();
+    void UpdateSubDirs();
 
     void StartForceSyncTimer();
     void StartSmartSyncTimer();
@@ -130,11 +138,7 @@ private:
     void SmartSync();
 
     void DeleteUnexistFile(const fspath &deleted_path);
-    void RebuildFiles(FsPathVec &paths);
-
     void LoadCmakeCompilationInfo(const fspath &build_path);
-
-    void RebuildProject();
 
     void BuildModuleFlags();
 
@@ -142,6 +146,8 @@ private:
 
     void AddFileWatch(const fspath &path);
     void RemoveFileWatch(const fspath &path);
+
+    bool ShouldBuildFile(const fspath &path) const;
 
 private:
     std::string proj_name_;
@@ -161,6 +167,7 @@ private:
     RelativeDirModuleMap rel_dir_module_map_;
     int64_t cmake_file_last_mtime_;
     mutable std::shared_mutex module_mutex_;
+    std::shared_ptr<ProjectConfig> config_;
 };
 
 } /* symdb  */

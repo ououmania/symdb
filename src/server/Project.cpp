@@ -119,6 +119,13 @@ Project::Project(const std::string &name)
     : proj_name_ { name },
       smart_sync_timer_ { ServerInst.main_io_service() },
       force_sync_timer_ { ServerInst.main_io_service() } {
+    cx_index_ = SmartCXIndex { clang_createIndex(0, 1), clang_disposeIndex };
+    if (!cx_index_) {
+        THROW_AT_FILE_LINE("project<%s> failed to create index", name.c_str());
+    }
+
+    StartSmartSyncTimer();
+    StartForceSyncTimer();
 }
 
 ProjectPtr Project::CreateFromDatabase(const std::string &name) {
@@ -127,45 +134,53 @@ ProjectPtr Project::CreateFromDatabase(const std::string &name) {
     }
 
     ProjectPtr project = std::make_shared<Project>(name);
-    project->Initialize(false);
-    project->LoadProjectInfo();
+    project->InitializeLevelDB(false, false);
+    if (!project->LoadProjectInfo()) {
+        THROW_AT_FILE_LINE("project<%s> load failed", name.c_str());
+    }
 
     return project;
 }
 
-ProjectPtr Project::CreateFromConfig(const std::string &name, const std::string &home_dir) {
+ProjectPtr Project::CreateFromConfigFile(const std::string &name, const fspath &home) {
     if (name.empty()) {
         THROW_AT_FILE_LINE("empty project name");
     }
 
-    if (home_dir.empty()) {
-        THROW_AT_FILE_LINE("empty project home");
-    }
-
-    fspath home_path(home_dir);
-    if (!filesystem::is_directory(home_path)) {
-        THROW_AT_FILE_LINE("home_path<%s> is not directory", home_path.c_str());
+    if (!filesystem::is_directory(home)) {
+        THROW_AT_FILE_LINE("home_path<%s> is not directory", home.c_str());
     }
 
     ProjectPtr project = std::make_shared<Project>(name);
-    project->Initialize(true);
-    project->ChangeHome(home_dir);
+    project->InitializeLevelDB(true, true);
+    project->ChangeHome(home);
 
     return project;
 }
 
-void Project::Initialize(bool is_new) {
-    cx_index_ = SmartCXIndex { clang_createIndex(0, 1), clang_disposeIndex };
-    if (!cx_index_) {
-        throw symdb::ClangParseError("failed to create index");
+ProjectPtr Project::CreateFromConfig(std::shared_ptr<ProjectConfig> config) {
+    if (!filesystem::is_directory(config->home_path())) {
+        THROW_AT_FILE_LINE("home_path<%s> is not directory",
+                           config->home_path().c_str());
     }
 
+    ProjectPtr project = std::make_shared<Project>(config->name());
+    project->SetConfig(config);
+    project->InitializeLevelDB(true, false);
+    project->LoadProjectInfo();
+    project->ChangeHome(config->home_path());
+
+    return project;
+}
+
+void Project::InitializeLevelDB(bool create_if_missing, bool error_if_exists) {
     fspath db_path { ConfigInst.db_path() };
 
     db_path /= proj_name_ + ".ldb";
 
     leveldb::Options options;
-    options.create_if_missing = is_new;
+    options.create_if_missing = create_if_missing;
+    options.error_if_exists = error_if_exists;
 
     leveldb::DB *raw_ptr;
     leveldb::Status status = leveldb::DB::Open(options, db_path.string(), &raw_ptr);
@@ -175,14 +190,9 @@ void Project::Initialize(bool is_new) {
     }
 
     symbol_db_.reset(raw_ptr);
-
-    StartSmartSyncTimer();
-    StartForceSyncTimer();
 }
 
 FsPathSet Project::GetAllSubDirs() {
-    fspath build_path = home_path_ / "_build";
-
     FsPathSet sub_dirs;
 
     filesystem::recursive_directory_iterator rdi(home_path_);
@@ -199,7 +209,7 @@ FsPathSet Project::GetAllSubDirs() {
             continue;
         }
 
-        if (symutil::path_has_prefix(abs_path, build_path)) {
+        if (symutil::path_has_prefix(abs_path, config_->build_path())) {
             LOG_INFO << "project=" << proj_name_ << " exclude " << rdi->path();
             continue;
         }
@@ -250,7 +260,11 @@ void Project::RemoveFileWatch(const fspath &path) {
     LOG_INFO << "watch not added, project=" << proj_name_ << " path=" << path;
 }
 
-void Project::UpdateFileWatch() {
+void Project::UpdateSubDirs() {
+    if (!config_->is_enable_file_watch()) {
+        return;
+    }
+
     FsPathSet new_sub_dirs = GetAllSubDirs();
     for (const auto &fs_path : new_sub_dirs) {
         if (all_sub_dirs_.find(fs_path) == all_sub_dirs_.end()) {
@@ -275,18 +289,16 @@ void Project::Build() {
     batch.WriteSrcPath();
 
     for (const auto &abs_path : abs_src_paths_) {
-        if (ConfigInst.IsFileExcluded(abs_path)) {
+        if (!ShouldBuildFile(abs_path)) {
             continue;
         }
-
-        if (!DoesFileContentChange(abs_path)) {
-            continue;
+        try {
+            BuildFile(abs_path);
+        } catch (const std::exception &e) {
+            LOG_ERROR << "BuildFile error=" << e.what() << " project="
+                      << proj_name_ << " path" << abs_path;
         }
-
-        BuildFile(abs_path);
     }
-
-    LOG_DEBUG << "project=" << proj_name_ << ", files=" << abs_src_paths_.size();
 }
 
 void Project::BuildFile(const fspath &abs_path) {
@@ -318,10 +330,10 @@ void Project::BuildFile(const fspath &abs_path) {
         shared_from_this(), home_path_, abs_path, compiler_flags));
 }
 
-void Project::ChangeHome(const std::string &new_home) {
+void Project::ChangeHome(const fspath &new_home) {
     fspath refined_path = filesystem::canonical(new_home);
     if (filesystem::equivalent(home_path_, refined_path)) {
-        LOG_INFO << "home not change, project=" << proj_name_;
+        LOG_INFO << "home not change, project=" << proj_name_ << " home=" << new_home;
         return;
     }
 
@@ -356,11 +368,11 @@ void Project::ChangeHomeNoCheck(fspath &&new_path) {
 
     // Although it may take some seconds and block the main thread, we think
     // it's acceptable. It's compilcated to post the task to the workers.
-    RebuildProject();
+    ForceSync();
 }
 
-void Project::ClangParseFile(const fspath &home_path,
-                             const fspath &abs_path,
+void Project::ClangParseFile(fspath home_path,
+                             fspath abs_path,
                              StringVecPtr compile_flags) {
     assert(!ServerInst.IsInMainThread());
 
@@ -374,14 +386,18 @@ void Project::ClangParseFile(const fspath &home_path,
         shared_from_this(), relative_path, std::move(unit.defined_symbols())));
 }
 
-void Project::OnParseCompleted(const fspath &relative_path,
-                               const SymbolMap &new_symbols) {
+void Project::OnParseCompleted(fspath relative_path, const SymbolMap &new_symbols) {
     assert(ServerInst.IsInMainThread());
 
     fspath abs_path = filesystem::absolute(relative_path, home_path_);
     if (in_parsing_files_.erase(relative_path) == 0) {
         LOG_INFO << "path is not in built, project=" << proj_name_
                  << " path=" << relative_path;
+    }
+
+    if (in_parsing_files_.size() < 5) {
+        LOG_INFO << "project=" << proj_name_ << " in_parsing_files="
+                 << in_parsing_files_.size();
     }
 
     if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
@@ -393,26 +409,17 @@ void Project::OnParseCompleted(const fspath &relative_path,
     SymbolMap old_symbols;
     (void) LoadFileSymbolInfo(relative_path, old_symbols);
 
-    leveldb::WriteBatch batch;
+    BatchWriter batch { this };
+
+    std::string module_name = GetModuleName(abs_path);
 
     auto put_symbol = [&](const std::string &symbol, const Location &loc) {
         auto symkey = MakeSymbolKey(symbol);
 
         DB_SymbolInfo st;
-        if (LoadKeyPBValue(symkey, st)) {
-            Location sym_loc = GetSymbolLocation(st, abs_path);
-            if (sym_loc.IsValid()) {
-                LOG_DEBUG << "project=" << proj_name_ << " symbol=" << symbol
-                          << " already exist:" << sym_loc;
-                return;
-            }
+        (void) LoadKeyPBValue(symkey, st);
+        AddSymbolLocation(st, module_name, loc);
 
-            LOG_DEBUG << "project=" << proj_name_ << " symbol=" << symbol
-                      << " locations=" << st.locations_size();
-        }
-
-        auto *pb_loc = st.add_locations();
-        loc.Seriaize(*pb_loc);
         auto loc_str = st.SerializeAsString();
         batch.Put(symkey, loc_str);
     };
@@ -427,7 +434,7 @@ void Project::OnParseCompleted(const fspath &relative_path,
         } else {
             Location location = QuerySymbolDefinition(kv.first, relative_path);
             if (!(location == it->second)) {
-                put_symbol(kv.first, location);
+                put_symbol(kv.first, it->second);
             }
         }
     }
@@ -466,20 +473,12 @@ void Project::OnParseCompleted(const fspath &relative_path,
             batch.Put(file_symbol_key, file_symbol_info.SerializeAsString());
         }
     }
-
-    leveldb::WriteOptions write_options;
-    write_options.sync = false;
-    leveldb::Status s = symbol_db_->Write(write_options, &batch);
-    if (!s.ok()) {
-        LOG_ERROR << "failed to write, error=" << s.ToString() << " project="
-                  << proj_name_ << " file=" << relative_path;
-    }
 }
 
-void Project::LoadProjectInfo() {
+bool Project::LoadProjectInfo() {
     std::string home_dir;
     if (!LoadKey(kSymdbProjectHomeKey, home_dir)) {
-        THROW_AT_FILE_LINE("project<%s> home not set", proj_name_.c_str());
+        return false;
     }
 
     DB_ProjectInfo db_info;
@@ -489,12 +488,16 @@ void Project::LoadProjectInfo() {
 
     LOG_DEBUG << "project=" << proj_name_ << ", home=" << home_dir;
 
+    home_path_ = fspath { home_dir };
+
     for (const auto &rel_path : db_info.rel_paths()) {
         LOG_DEBUG << "relative source file: " << rel_path;
         abs_src_paths_.insert(filesystem::absolute(rel_path, home_path_));
     }
 
     ChangeHomeNoCheck(home_dir);
+
+    return true;
 }
 
 bool Project::LoadFileSymbolInfo(const fspath &file_path, SymbolMap &symbols) const
@@ -668,7 +671,6 @@ bool Project::DoesFileContentChange(const fspath &abs_path) const {
     }
 
     auto last_mtime = filesystem::last_write_time(abs_path);
-    LOG_DEBUG << "filename=" << abs_path << ", last_mtime=" << last_mtime;
 
     return (file_info.last_mtime() != last_mtime);
 }
@@ -704,10 +706,17 @@ void Project::HandleFileModified(int wd, const std::string &path)
 
     LOG_DEBUG << "project=" << proj_name_ << " wd=" << wd << " path=" << fs_path;
 
+    if (!fs_path.has_extension()) {
+        return;
+    }
+
     if (filesystem::equivalent(cmake_file_path_, fs_path)) {
-        RebuildProject();
+        ForceSync();
     } else {
-        modified_files_.push_back(fs_path);
+        auto ext = fs_path.extension();
+        if (ext == "cc" || ext == "cpp") {
+            modified_files_.push_back(fs_path);
+        }
     }
 }
 
@@ -747,7 +756,10 @@ void Project::StartForceSyncTimer() {
     force_sync_timer_.expires_from_now(duration);
     force_sync_timer_.async_wait(
         [this](const auto &ec) {
-            if(!ec) this->ForceSync();
+            if (!ec) {
+                this->ForceSync();
+                StartForceSyncTimer();
+            }
         }
     );
 
@@ -756,28 +768,31 @@ void Project::StartForceSyncTimer() {
 }
 
 void Project::ForceSync() {
-    StartForceSyncTimer();
-
     FsPathSet old_abs_paths = abs_src_paths_;
 
-    BuildModuleFlags();
-
-    UpdateFileWatch();
-
-    for (const auto &abs_path : old_abs_paths) {
-        if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
-            DeleteUnexistFile(abs_path);
+    try {
+        BuildModuleFlags();
+        UpdateSubDirs();
+        for (const auto &abs_path : old_abs_paths) {
+            if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
+                DeleteUnexistFile(abs_path);
+            }
         }
-    }
 
-    Build();
+        Build();
+    } catch (const std::exception &e) {
+        LOG_ERROR << "exception: " << e.what() << " project=" << proj_name_;
+    }
 }
 
 void Project::StartSmartSyncTimer() {
-    smart_sync_timer_.expires_from_now(boost::posix_time::seconds(60));
+    smart_sync_timer_.expires_from_now(boost::posix_time::seconds(30));
     smart_sync_timer_.async_wait(
         [this](const auto &ec) {
-            if(!ec) this->SmartSync();
+            if (!ec) {
+                this->SmartSync();
+                StartSmartSyncTimer();
+            }
         }
     );
 }
@@ -799,22 +814,6 @@ void Project::SmartSync() {
                       << proj_name_ << " path" << path;
         }
     }
-
-    StartSmartSyncTimer();
-}
-
-void Project::RebuildFiles(FsPathVec &paths) {
-    std::sort(paths.begin(), paths.end());
-    auto uq_it = std::unique(paths.begin(), paths.end());
-    paths.erase(uq_it, paths.end());
-
-    for (const auto &path : paths) {
-        try {
-            BuildFile(path);
-        } catch (const std::exception &e) {
-            LOG_ERROR << "BuildFile exception=" << e.what() << ", path" << path;
-        }
-    }
 }
 
 void Project::DeleteUnexistFile(const fspath &deleted_path)
@@ -828,7 +827,7 @@ void Project::DeleteUnexistFile(const fspath &deleted_path)
     }
 
     if (abs_src_paths_.erase(deleted_path) == 0) {
-        LOG_INFO << "path not added, project=" << proj_name_
+        LOG_INFO << "path is not added, project=" << proj_name_
                  << " path=" << deleted_path;
         return;
     }
@@ -856,16 +855,12 @@ void Project::DeleteUnexistFile(const fspath &deleted_path)
     for (const auto &symbol : db_fs_info.symbols()) {
         DB_SymbolInfo db_info;
         if (!GetSymbolDBInfo(symbol, db_info)) {
-            LOG_ERROR << "GetSymbolDBInfo failed, project=" << proj_name_ << " symbol=" << symbol;
+            LOG_ERROR << "GetSymbolDBInfo failed, project=" << proj_name_
+                      << " symbol=" << symbol;
             continue;
         }
 
-        for (auto it = db_info.locations().begin(); it != db_info.locations().end(); ++it) {
-            auto pb_module_name = GetModuleName(it->path());
-            if (module_name == pb_module_name) {
-                db_info.mutable_locations()->erase(it);
-            }
-        }
+        RemoveSymbolLocation(db_info, module_name);
         batch.PutSymbol(symbol, db_info);
     }
 
@@ -884,25 +879,24 @@ void Project::BuildModuleFlags() {
             proj_name_.c_str(), cmake_file_path_.c_str());
     }
 
-    char file_templ[] = "/tmp/symdb_buildXXXXXX";
-    const char *tmp_dir = mkdtemp(file_templ);
+    const char *build_dir = config_->build_path().c_str();
 
     const char *cmake_default_cmd = "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1";
 
     fspath cmake_file_dir = cmake_file_path_.parent_path();
 
     char command[BUFSIZ];
-    snprintf(command, sizeof(command), "%s -S %s -B %s &> /dev/null",
-             cmake_default_cmd, cmake_file_dir.c_str(), tmp_dir);
+    snprintf(command, sizeof(command), "%s -S %s -B %s &> /%s/error.txt",
+             cmake_default_cmd, cmake_file_dir.c_str(), build_dir, build_dir);
 
     int ret = system(command);
     if (ret != 0) {
-        THROW_AT_FILE_LINE("system ret<%d>: %s", ret, strerror(errno));
+        THROW_AT_FILE_LINE("command<%s> build_dir<%s> system ret<%d>: %s",
+            command, build_dir, ret, strerror(errno));
     }
 
-    fspath build_path { tmp_dir };
+    LoadCmakeCompilationInfo(config_->build_path());
 
-    LoadCmakeCompilationInfo(build_path);
     /*CXCompilationDatabase_Error status;
     auto database = clang_CompilationDatabase_fromDirectory(
                             build_path.c_str(),
@@ -911,16 +905,6 @@ void Project::BuildModuleFlags() {
         RawPointerWrap<CXCompilationDatabase> guard { database, clang_CompilationDatabase_dispose };
         LoadCmakeCompilationInfo(build_path, database);
     }*/
-}
-
-void Project::RebuildProject() {
-    try {
-        BuildModuleFlags();
-        UpdateFileWatch();
-        Build();
-    } catch (const std::exception &e) {
-        LOG_ERROR << "BuildModuleFlags exception: " << e.what();
-    }
 }
 
 void Project::LoadCmakeCompilationInfo(const fspath &build_path)
@@ -937,10 +921,16 @@ void Project::LoadCmakeCompilationInfo(const fspath &build_path)
         BOOST_FOREACH(boost::property_tree::ptree::value_type &v, pt) {
             std::string file_name = v.second.get<std::string>("file");
             fspath abs_file_path = filesystem::path(file_name);
-            if (ConfigInst.IsFileExcluded(abs_file_path)) {
+            if (config_->IsFileExcluded(abs_file_path)) {
                 LOG_DEBUG << "excluded " << abs_file_path;
                 continue;
             }
+
+            if (symutil::path_has_prefix(abs_file_path, build_path)) {
+                continue;
+            }
+
+            assert (symutil::path_has_prefix(abs_file_path, home_path_));
 
             abs_src_paths_.insert(abs_file_path);
             fspath work_dir_path = fspath { v.second.get<std::string>("directory") };
@@ -965,6 +955,8 @@ void Project::LoadCmakeCompilationInfo(const fspath &build_path)
     } catch (const std::exception &e) {
         std::cerr << "Exception " << e.what() << std::endl;
     }
+
+    LOG_DEBUG << "project=" << proj_name_ << ", files=" << abs_src_paths_.size();
 
     /*RawPointerWrap<CXCompileCommands> commands(
       clang_CompilationDatabase_getAllCompileCommands(
@@ -1026,6 +1018,52 @@ StringVecPtr Project::GetModuleCompilationFlag(const std::string &module_name) {
         return it->second;
     }
     return StringVecPtr {};
+}
+
+bool Project::ShouldBuildFile(const fspath &abs_path) const {
+    if (config_->IsFileExcluded(abs_path)) {
+        return false;
+    }
+
+    if (!DoesFileContentChange(abs_path)) {
+        return false;
+    }
+
+    return true;
+}
+
+void Project::AddSymbolLocation(DB_SymbolInfo &db_info,
+                                const std::string &module_name,
+                                const Location &location)
+{
+    assert(location.IsValid());
+
+    auto locations = db_info.mutable_locations();
+    for (auto it = locations->begin(); it != locations->end(); ++it) {
+        auto pb_module_name = GetModuleName(it->path());
+        if (module_name == pb_module_name) {
+            location.Seriaize(*it);
+            return;
+        }
+    }
+
+    auto *pb_loc = db_info.add_locations();
+    location.Seriaize(*pb_loc);
+}
+
+bool Project::RemoveSymbolLocation(DB_SymbolInfo &db_info,
+                                   const std::string &module_name)
+{
+    auto locations = db_info.mutable_locations();
+    for (auto it = locations->begin(); it != locations->end(); ++it) {
+        auto pb_module_name = GetModuleName(it->path());
+        if (module_name == pb_module_name) {
+            locations->erase(it);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 } /* symdb */

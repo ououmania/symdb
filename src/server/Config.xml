@@ -1,7 +1,7 @@
 <Config>
     <Listen>/tmp/symdb.sock</Listen>
-    <DataDir>/home/richy/.symdb/data</DataDir>
-    <LogDir>/home/richy/.symdb/log</LogDir>
+    <DataDir>${HOME}/.symdb/data</DataDir>
+    <LogDir>${HOME}/.symdb/log</LogDir>
 
     <!-- If not set, get from "g++ -E -x c++ - -v < /dev/null 2>&1" -->
     <SystemInclude>
@@ -15,13 +15,13 @@
 
     <GlobalExcluded>
         <!--Exclude all protobuf generated files -->
-        <ExcludeEntry pattern=".*\\.pb\\.(cc|h)$" />
+        <ExcludeEntry pattern=".*\.pb\.(cc|h)$" />
         <ExcludeEntry pattern=".*/_?build/.*" />
     </GlobalExcluded>
     <Projects>
         <Project>
             <Name>symdb</Name>
-            <Home>/home/richy/git/symdb</Home>
+            <Home>${MYGIT_DIR}/symdb</Home>
         </Project>
     </Projects>
 </Config>
