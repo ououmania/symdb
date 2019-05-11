@@ -141,9 +141,9 @@ bool TranslationUnit::IsWantedCursor(CXCursor cursor)
 {
     auto kind = clang_getCursorKind(cursor);
     switch (kind) {
+    // We don't ignore private methods.
     case CXCursorKind::CXCursor_CXXMethod:
     case CXCursorKind::CXCursor_Constructor:
-    case CXCursorKind::CXCursor_Destructor:
         return true;
 
     case CXCursorKind::CXCursor_StructDecl:
