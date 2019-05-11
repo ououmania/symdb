@@ -2,6 +2,10 @@
 
 #include <string>
 #include <algorithm>
+#include <regex>
+#include <cstdlib>
+#include <iostream>
+
 #include <boost/filesystem.hpp>
 
 namespace symutil {
@@ -43,6 +47,18 @@ replace_string(std::string &dest, const std::string &from, const std::string &to
     if (pos != std::string::npos) {
         dest.replace(pos, from.size(), to);
     }
+}
+
+inline std::string expand_env(std::string text)
+{
+    static const std::regex env_re {R"--(\$\{([^}]+)\})--"};
+    std::smatch match;
+    while (std::regex_search(text, match, env_re)) {
+        auto const from = match[0];
+        auto const var_name = match[1].str().c_str();
+        text.replace(from.first, from.second, std::getenv(var_name));
+    }
+    return text;
 }
 
 } /* symutil  */
