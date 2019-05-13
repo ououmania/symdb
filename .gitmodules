@@ -1,0 +1,9 @@
+[submodule "third_party/protobuf"]
+	path = third_party/protobuf
+	url = https://github.com/protocolbuffers/protobuf
+[submodule "third_party/leveldb"]
+	path = third_party/leveldb
+	url = https://github.com/google/leveldb
+[submodule "third_party/snappy"]
+	path = third_party/snappy
+	url = https://github.com/google/snappy

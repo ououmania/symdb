@@ -8,3 +8,5 @@
 !src/**/*.h
 !src/**/*.hpp
 !src/server/Config.xml
+!third_party/*
+!cmake/*.cmake
