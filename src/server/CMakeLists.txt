@@ -2,10 +2,9 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 
 set(TARGET symdb)
 
-find_library(LevelDB_LIBRARY NAMES leveldb)
 find_library(Clang_LIBRARY NAMES clang)
 
-add_symbol_executable(${TARGET} snappy ${LevelDB_LIBRARY})
+add_symbol_executable(${TARGET} ${Clang_LIBRARY} ${LEVELDB_LIBRARY} snappy)
 
 add_custom_target( copy_symdb_config
                    COMMAND cmake -E copy
