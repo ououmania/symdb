@@ -52,6 +52,8 @@ public:
 
     void ListProjects(const StringVec &args);
 
+    void ListProjectFiles(const StringVec &args);
+
     void GetSymbolDefinition(const StringVec &args);
     void GetSymbolReference(const StringVec &args);
 
@@ -87,6 +89,7 @@ private:
     std::unique_ptr<AsioStream> signal_stream_;
     std::string history_file_;
     StringVec completion_cmds_;
+    boost::asio::io_service *io_service_;
     bool is_running_;
 };
 

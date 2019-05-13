@@ -70,6 +70,7 @@ void SymShell::Init(boost::asio::io_service &io_context,
     root_cmd_["project"]["update"].SetHandler(std::bind(&SymShell::UpdateProject, this, std::placeholders::_1));
     root_cmd_["project"]["delete"].SetHandler(std::bind(&SymShell::DeleteProject, this, std::placeholders::_1));
     root_cmd_["project"]["list"].SetHandler(std::bind(&SymShell::ListProjects, this, std::placeholders::_1));
+    root_cmd_["project"]["files"].SetHandler(std::bind(&SymShell::ListProjectFiles, this, std::placeholders::_1));
     root_cmd_["symbol"]["definition"].SetHandler(std::bind(&SymShell::GetSymbolDefinition, this, std::placeholders::_1));
     root_cmd_["symbol"]["reference"].SetHandler(std::bind(&SymShell::GetSymbolReference, this, std::placeholders::_1));
     root_cmd_["file"]["symbols"].SetHandler(std::bind(&SymShell::GetFileSymbols, this, std::placeholders::_1));
@@ -78,6 +79,7 @@ void SymShell::Init(boost::asio::io_service &io_context,
 
     is_running_ = true;
 
+    io_service_ = &io_context;
     SetupSignal(io_context);
     SetupReadline(io_context);
 }
@@ -215,7 +217,7 @@ void SymShell::CreateProject(const StringVec &args)
         return;
     }
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     session.create_project(args[0], args[1]);
 }
 
@@ -226,7 +228,7 @@ void SymShell::UpdateProject(const StringVec &args)
         return;
     }
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     session.update_project(args[0]);
 }
 
@@ -237,7 +239,7 @@ void SymShell::DeleteProject(const StringVec &args)
         return;
     }
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     session.delete_project(args[0]);
 }
 
@@ -245,8 +247,19 @@ void SymShell::ListProjects(const StringVec &args)
 {
     (void) args;
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     session.list_projects();
+}
+
+void SymShell::ListProjectFiles(const StringVec &args)
+{
+    if (args.size() != 1) {
+        ERROR_LN("usage: project files <proj_name>");
+        return;
+    }
+
+    symdb::Session session(*io_service_, kDefaultSockPath);
+    session.list_project_files(args.front());
 }
 
 void SymShell::GetSymbolDefinition(const StringVec &args)
@@ -256,7 +269,7 @@ void SymShell::GetSymbolDefinition(const StringVec &args)
         return;
     }
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     if (args.size() == 3) {
         session.get_symbol_definition(args[0], args[1], args[2]);
     } else {
@@ -271,7 +284,7 @@ void SymShell::GetSymbolReference(const StringVec &args)
         return;
     }
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     session.get_symbol_references(args[0], args[1]);
 }
 
@@ -282,7 +295,7 @@ void SymShell::GetFileSymbols(const StringVec &args)
         return;
     }
 
-    symdb::Session session(rl_stream_->get_io_service(), kDefaultSockPath);
+    symdb::Session session(*io_service_, kDefaultSockPath);
     session.list_file_symbols(args[0], args[1]);
 }
 

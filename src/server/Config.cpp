@@ -1,16 +1,15 @@
 #include "Config.h"
 #include "pugixml.hpp"
+#include "TypeAlias.h"
 #include "util/Logger.h"
 #include "util/Functions.h"
 #include "util/Exceptions.h"
 #include "util/NetDefine.h"
 #include <iostream>
 #include <exception>
-#include <boost/filesystem.hpp>
 #include <cstdio>
 
-namespace symdb
-{
+namespace symdb {
 
 inline std::string child_value_or_default(
     const pugi::xml_node &node,
@@ -62,7 +61,7 @@ void ProjectConfig::SetBuildPath(std::string path) {
     LOG_DEBUG << "project=" << name_ << " path=" << path;
     symutil::replace_string(path, "{PROJECT_HOME}", home_path_.string());
     fspath build_path { path };
-    boost::filesystem::create_directories(build_path);
+    filesystem::create_directories(build_path);
     build_path_ = filesystem::canonical(build_path, home_path_);
     LOG_DEBUG << "project=" << name_ << " final_build_path=" << build_path_;
 }
@@ -108,14 +107,14 @@ void Config::Init(const std::string &xml_file)
     listen_path_ = child_value_or_default(root_node, "Listen", symdb::kDefaultSockPath);
 
     auto ensure_dir_exists = [](const std::string &dir) {
-        boost::filesystem::path dir_path(dir);
-        boost::filesystem::create_directories(dir_path);
+        filesystem::path dir_path(dir);
+        filesystem::create_directories(dir_path);
     };
 
     ensure_dir_exists(db_path_);
     ensure_dir_exists(log_path_);
 
-    boost::filesystem::path log_file = boost::filesystem::path(log_path_) / "symdb.log";
+    filesystem::path log_file = filesystem::path(log_path_) / "symdb.log";
 
     LoggerInst.Init(symdb::LogLevel::DEBUG, log_file.string());
 

@@ -23,10 +23,10 @@ private:
 
 } // namespace symdb
 
-#define THROW_AT_FILE_LINE(__fmt, ...)                              \
-    do {                                                                      \
-        boost::filesystem::path path(__FILE__);                               \
-        throw symdb::GeneralException("%s:%d " __fmt, path.filename().c_str(),\
-                __LINE__, ##__VA_ARGS__);                                     \
+#define THROW_AT_FILE_LINE(__fmt, ...)                                         \
+    do {                                                                       \
+        boost::filesystem::path path(__FILE__);                                \
+        throw symdb::GeneralException("%s:%d " __fmt, path.filename().c_str(), \
+                __LINE__, ##__VA_ARGS__);                                      \
     } while (false)
 

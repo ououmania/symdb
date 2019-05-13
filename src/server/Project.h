@@ -11,14 +11,12 @@
 #include <memory>
 #include <shared_mutex>
 #include <type_traits>
-#include <boost/filesystem.hpp>
 #include <leveldb/db.h>
 #include <clang-c/Index.h>
 #include <clang-c/CXCompilationDatabase.h>
 
 namespace symdb {
 
-namespace stdfs = boost::filesystem;
 using FsPathVec = std::vector<fspath>;
 using FsPathSet = std::set<fspath>;
 
@@ -81,6 +79,8 @@ public:
 
     Location QuerySymbolDefinition(const std::string &symbol, const fspath &abs_path) const;
 
+    const FsPathSet& abs_src_paths() const { return abs_src_paths_; }
+
     const fspath& home_path() const { return home_path_; }
 
     bool IsWatchFdInList(int file_wd) const;
@@ -100,7 +100,12 @@ private:
                         fspath abs_path,
                         StringVecPtr compile_flags);
 
-    void OnParseCompleted(fspath relative_path, const SymbolMap &new_symbols);
+    void OnParseCompleted(fspath relative_path);
+
+    void WriteCompiledFile(const fspath &relative_path,
+                           const fspath &abs_path,
+                           const std::string &md5,
+                           const SymbolMap &new_symbols);
 
     std::string MakeFileInfoKey(const fspath &file_path) const;
     std::string MakeFileSymbolKey(const fspath &file_rel_path) const;
@@ -116,8 +121,6 @@ private:
     bool PutSingleKey(const std::string &key, const std::string &value);
 
     bool GetSymbolDBInfo(const std::string &symbol, DB_SymbolInfo &st) const;
-
-    bool DoesFileContentChange(const fspath &abs_path) const;
 
     std::string GetModuleName(const fspath &path) const;
 
@@ -146,8 +149,6 @@ private:
 
     void AddFileWatch(const fspath &path);
     void RemoveFileWatch(const fspath &path);
-
-    bool ShouldBuildFile(const fspath &path) const;
 
 private:
     std::string proj_name_;

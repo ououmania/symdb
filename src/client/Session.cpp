@@ -66,6 +66,15 @@ void Session::list_projects()
     send_and_recv(MessageID::LIST_PROJECT_REQ, req, rsp);
 }
 
+void Session::list_project_files(const std::string &proj_name)
+{
+    ListProjectFilesReq req;
+    req.set_proj_name(proj_name);
+
+    ListProjectFilesRsp rsp;
+    send_and_recv(MessageID::LIST_PROJECT_FILES_REQ, req, rsp);
+}
+
 void Session::get_symbol_definition(const std::string &proj_name,
     const std::string &symbol, const std::string &abs_path)
 {

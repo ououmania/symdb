@@ -26,6 +26,7 @@ public:
     void delete_project(const std::string &proj_name);
     void update_project(const std::string &proj_name);
     void list_projects();
+    void list_project_files(const std::string &proj_name);
 
     void get_symbol_definition(const std::string &proj_name, const std::string &symbol, const std::string &abs_path);
     void get_symbol_references(const std::string &proj_name, const std::string &symbol);

@@ -44,6 +44,7 @@ private:
     void delete_project(const uint8_t *buffer, size_t length);
     void update_project(const uint8_t *buffer, size_t length);
     void list_project(const uint8_t *buffer, size_t length);
+    void list_project_files(const uint8_t *buffer, size_t length);
     void get_symbol_definition(const uint8_t *buffer, size_t length);
     void get_symbol_references(const uint8_t *buffer, size_t length);
     void list_file_symbols(const uint8_t *buffer, size_t length);

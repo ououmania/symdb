@@ -5,7 +5,6 @@
 #include <regex>
 #include <cstdlib>
 #include <iostream>
-
 #include <boost/filesystem.hpp>
 
 namespace symutil {

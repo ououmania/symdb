@@ -5,6 +5,7 @@
 #include "util/Logger.h"
 #include "util/Functions.h"
 #include "util/Exceptions.h"
+#include "util/MD5.h"
 #include "proto/DBInfo.pb.h"
 #include <istream>
 #include <sys/inotify.h>
@@ -210,7 +211,6 @@ FsPathSet Project::GetAllSubDirs() {
         }
 
         if (symutil::path_has_prefix(abs_path, config_->build_path())) {
-            LOG_INFO << "project=" << proj_name_ << " exclude " << rdi->path();
             continue;
         }
 
@@ -289,9 +289,10 @@ void Project::Build() {
     batch.WriteSrcPath();
 
     for (const auto &abs_path : abs_src_paths_) {
-        if (!ShouldBuildFile(abs_path)) {
+        if (config_->IsFileExcluded(abs_path)) {
             continue;
         }
+
         try {
             BuildFile(abs_path);
         } catch (const std::exception &e) {
@@ -376,42 +377,51 @@ void Project::ClangParseFile(fspath home_path,
                              StringVecPtr compile_flags) {
     assert(!ServerInst.IsInMainThread());
 
+    auto file_info_key = MakeFileInfoKey(abs_path);
+    DB_FileBasicInfo file_info;
+    (void) LoadKeyPBValue(file_info_key, file_info);
+
+    auto last_mtime = symdb::last_wtime(abs_path);
+
+    LOG_DEBUG << "project=" << proj_name_ << ", path=" << abs_path
+              << " saved_mtime=" << file_info.last_mtime() << ", last_mtime="
+              << last_mtime;
+
+    if (file_info.last_mtime() == last_mtime) {
+        return;
+    }
+
+    std::string file_md5 = symutil::md5_stream_str(abs_path.c_str());
+    if (file_md5 == file_info.content_md5()) {
+        return;
+    }
+
+    LOG_DEBUG << "start, file=" << abs_path;
+
     TranslationUnit unit(abs_path.string(), *compile_flags, cx_index_.get());
     unit.CollectSymbols();
+
+    LOG_DEBUG << "end, file=" << abs_path;
 
     // We just tell the main thread the relative path so we can change the home
     // easily even if the project is building.
     fspath relative_path = filesystem::relative(abs_path, home_path);
+    WriteCompiledFile(relative_path, abs_path, file_md5, unit.defined_symbols());
+
     ServerInst.PostToMain(std::bind(&Project::OnParseCompleted,
-        shared_from_this(), relative_path, std::move(unit.defined_symbols())));
+        shared_from_this(), relative_path));
 }
 
-void Project::OnParseCompleted(fspath relative_path, const SymbolMap &new_symbols) {
-    assert(ServerInst.IsInMainThread());
-
-    fspath abs_path = filesystem::absolute(relative_path, home_path_);
-    if (in_parsing_files_.erase(relative_path) == 0) {
-        LOG_INFO << "path is not in built, project=" << proj_name_
-                 << " path=" << relative_path;
-    }
-
-    if (in_parsing_files_.size() < 5) {
-        LOG_INFO << "project=" << proj_name_ << " in_parsing_files="
-                 << in_parsing_files_.size();
-    }
-
-    if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
-        LOG_INFO << "path already deleted, project=" << proj_name_
-                 << " path=" << abs_path;
-        return;
-    }
-
+void Project::WriteCompiledFile(const fspath &relative_path,
+                                const fspath &abs_path,
+                                const std::string &md5,
+                                const SymbolMap &new_symbols) {
     SymbolMap old_symbols;
     (void) LoadFileSymbolInfo(relative_path, old_symbols);
 
     BatchWriter batch { this };
 
-    std::string module_name = GetModuleName(abs_path);
+    std::string module_name = GetModuleName(relative_path);
 
     auto put_symbol = [&](const std::string &symbol, const Location &loc) {
         auto symkey = MakeSymbolKey(symbol);
@@ -450,7 +460,7 @@ void Project::OnParseCompleted(fspath relative_path, const SymbolMap &new_symbol
         put_symbol(kv.first, new_loc);
     }
 
-    auto last_mtime = filesystem::last_write_time(abs_path);
+    auto last_mtime = symdb::last_wtime(abs_path);
 
     DB_FileBasicInfo file_table;
     file_table.set_last_mtime(last_mtime);
@@ -472,6 +482,27 @@ void Project::OnParseCompleted(fspath relative_path, const SymbolMap &new_symbol
         } else {
             batch.Put(file_symbol_key, file_symbol_info.SerializeAsString());
         }
+    }
+}
+
+void Project::OnParseCompleted(fspath relative_path) {
+    assert(ServerInst.IsInMainThread());
+
+    fspath abs_path = filesystem::absolute(relative_path, home_path_);
+    if (in_parsing_files_.erase(relative_path) == 0) {
+        LOG_INFO << "path is not in built, project=" << proj_name_
+                 << " path=" << relative_path;
+    }
+
+    if (in_parsing_files_.size() < 5) {
+        LOG_INFO << "project=" << proj_name_ << " in_parsing_files="
+                 << in_parsing_files_.size();
+    }
+
+    if (abs_src_paths_.find(abs_path) == abs_src_paths_.end()) {
+        LOG_INFO << "path already deleted, project=" << proj_name_
+                 << " path=" << abs_path;
+        return;
     }
 }
 
@@ -662,19 +693,6 @@ bool Project::PutSingleKey(const std::string &key, const std::string &value)
     return s.ok();
 }
 
-bool Project::DoesFileContentChange(const fspath &abs_path) const {
-    auto file_info_key = MakeFileInfoKey(abs_path);
-
-    DB_FileBasicInfo file_info;
-    if (!LoadKeyPBValue(file_info_key, file_info)) {
-        return true;
-    }
-
-    auto last_mtime = filesystem::last_write_time(abs_path);
-
-    return (file_info.last_mtime() != last_mtime);
-}
-
 std::string Project::GetModuleName(const fspath &path) const {
     if (!path.is_absolute()) {
         fspath abs_path = filesystem::absolute(path, home_path_);
@@ -727,6 +745,12 @@ void Project::HandleFileDeleted(int wd, const std::string &path)
 
     fspath fs_path = it->second->abs_path() / path;
 
+    if (filesystem::exists(fs_path)) {
+        LOG_ERROR << "path still exists, project=" << proj_name_ << " path="
+                  << fs_path;
+        return;
+    }
+
     DeleteUnexistFile(fs_path);
 }
 
@@ -762,13 +786,10 @@ void Project::StartForceSyncTimer() {
             }
         }
     );
-
-    LOG_INFO <<  "project=" << proj_name_ << " next force sync at "
-             << to_iso_extended_string(day + duration);
 }
 
 void Project::ForceSync() {
-    FsPathSet old_abs_paths = abs_src_paths_;
+    FsPathSet old_abs_paths(std::move(abs_src_paths_));
 
     try {
         BuildModuleFlags();
@@ -819,12 +840,6 @@ void Project::SmartSync() {
 void Project::DeleteUnexistFile(const fspath &deleted_path)
 {
     LOG_INFO << "project=" << proj_name_ << " deleted_path=" << deleted_path;
-
-    if (filesystem::exists(deleted_path)) {
-        LOG_ERROR << "path still exists, project=" << proj_name_ << " path="
-                  << deleted_path;
-        return;
-    }
 
     if (abs_src_paths_.erase(deleted_path) == 0) {
         LOG_INFO << "path is not added, project=" << proj_name_
@@ -922,7 +937,6 @@ void Project::LoadCmakeCompilationInfo(const fspath &build_path)
             std::string file_name = v.second.get<std::string>("file");
             fspath abs_file_path = filesystem::path(file_name);
             if (config_->IsFileExcluded(abs_file_path)) {
-                LOG_DEBUG << "excluded " << abs_file_path;
                 continue;
             }
 
@@ -1018,18 +1032,6 @@ StringVecPtr Project::GetModuleCompilationFlag(const std::string &module_name) {
         return it->second;
     }
     return StringVecPtr {};
-}
-
-bool Project::ShouldBuildFile(const fspath &abs_path) const {
-    if (config_->IsFileExcluded(abs_path)) {
-        return false;
-    }
-
-    if (!DoesFileContentChange(abs_path)) {
-        return false;
-    }
-
-    return true;
 }
 
 void Project::AddSymbolLocation(DB_SymbolInfo &db_info,

@@ -137,6 +137,10 @@ void Session::handle_message(const uint8_t *buffer, size_t length)
         list_project(body_buffer, body_length);
         break;
 
+    case MessageID::LIST_PROJECT_FILES_REQ:
+        list_project_files(body_buffer, body_length);
+        break;
+
     case MessageID::GET_SYMBOL_DEFINITION_REQ:
         get_symbol_definition(body_buffer, body_length);
         break;
@@ -225,6 +229,30 @@ void Session::list_project(const uint8_t *buffer, size_t length)
 
     ResponseGuard<ListProjectRsp> rsp(this, MessageID::LIST_PROJECT_RSP);
     rsp->set_error("not implemented");
+}
+
+void Session::list_project_files(const uint8_t *buffer, size_t length)
+{
+    CHECK_PARSE_MESSAGE(ListProjectFilesReq, buffer, length);
+
+    ResponseGuard<ListProjectFilesRsp> rsp(this, MessageID::LIST_PROJECT_FILES_RSP);
+    ProjectPtr project = ServerInst.GetProject(msg.proj_name());
+    if (!project) {
+        LOG_ERROR << kErrorProjectNotFound << ", project=" << msg.proj_name();
+        rsp->set_error(kErrorProjectNotFound);
+        return;
+    }
+
+    rsp->set_home_path(project->home_path().string());
+    const auto &abs_src_paths = project->abs_src_paths();
+
+    auto *files = rsp->mutable_files();
+    files->Reserve(abs_src_paths.size());
+    for (const auto &path : abs_src_paths) {
+        fspath rel_path = filesystem::relative(path, project->home_path());
+        auto *file = rsp->add_files();
+        *file = rel_path.string();
+    }
 }
 
 void Session::get_symbol_definition(const uint8_t *buffer, size_t length)
