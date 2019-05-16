@@ -280,7 +280,7 @@ md5_signature(unsigned char *key, unsigned long length, unsigned char *result)
 }
 
 void
-md5_stream(const char *file, unsigned char *result)
+md5_file(const char *file, unsigned char *result)
 {
     std::ifstream ifs { file };
     if (!ifs.is_open()) {
@@ -299,13 +299,18 @@ md5_stream(const char *file, unsigned char *result)
     MD5_Final(result, &ctx);
 }
 
-std::string md5_stream_str(const char *file) {
+void md5_file_str(const char *file, char *result) {
     unsigned char md5[kMd5Length];
-    md5_stream(file, md5);
-    char buf[kMd5Length * 2 + 1];
+    md5_file(file, md5);
     for (int i = 0; i < kMd5Length; i++) {
-        sprintf(buf + i, "%02x", md5[i]);
+        sprintf(result + i * 2, "%02x", md5[i]);
     }
+    result[kMd5Length * 2] = '\0';
+}
+
+std::string md5_file_str(const char *file) {
+    char buf[kMd5StrLength];
+    md5_file_str(file, buf);
     return std::string { buf };
 }
 

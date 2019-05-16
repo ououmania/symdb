@@ -1,6 +1,6 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
-set (CMAKE_CXX_STANDARD 17)
+set (CMAKE_CXX_STANDARD 11)
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
@@ -12,7 +12,6 @@ function(add_symbol_executable target)
     add_executable( ${target} ${SRC_FILES} )
     set(extra_libs ${ARGN})
 
-    message (STATUS ${BOOST_LIBRARIES})
     TARGET_LINK_LIBRARIES(${target} proto symutil ${BOOST_LIBRARIES}
         ${PROTOBUF_LIBRARIES} pthread ${extra_libs})
 endfunction(add_symbol_executable)

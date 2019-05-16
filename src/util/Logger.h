@@ -24,20 +24,21 @@ struct LogConfig {
 };
 
 class BoostLogger {
+    using LoggerType = boost::log::sources::severity_logger_mt<LogLevel>;
 public:
     BoostLogger(const BoostLogger&) = delete;
 
     void Init(LogLevel level, const std::string &log_file);
     void Stop();
 
-    auto& Get() { return logger_; }
+    LoggerType& Get() { return logger_; }
 
     static BoostLogger& Instance();
 
 private:
     BoostLogger() = default;
 
-    boost::log::sources::severity_logger_mt<LogLevel> logger_;
+    LoggerType logger_;
 };
 
 } // namespace symdb

@@ -5,9 +5,24 @@
 #include <regex>
 #include <cstdlib>
 #include <iostream>
+#include <functional>
 #include <boost/filesystem.hpp>
 
 namespace symutil {
+
+struct FunctionRunnerGuard {
+    template <typename FuncType>
+    FunctionRunnerGuard(FuncType func)
+        : func_ { func } {
+    }
+
+    ~FunctionRunnerGuard() {
+        func_();
+    }
+
+private:
+     std::function<void()> func_;
+};
 
 inline const std::string& to_string(const std::string &s) { return s; }
 inline std::string to_string(const char *s) { return std::string(s); }
@@ -36,8 +51,14 @@ str_join(const char *delim, Arg1 &&arg1, Args&&... args) {
 inline bool
 path_has_prefix(const boost::filesystem::path & path, const boost::filesystem::path & prefix)
 {
-    auto pair = std::mismatch(path.begin(), path.end(), prefix.begin(), prefix.end());
-    return pair.second == prefix.end();
+    const std::string &path_str = path.string();
+    const std::string &prefix_str = prefix.string();
+
+    if (prefix_str.size() > path_str.size()) {
+        return false;
+    }
+
+    return path_str.compare(0, prefix_str.size(), prefix_str) == 0;
 }
 
 inline void

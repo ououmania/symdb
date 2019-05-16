@@ -2,6 +2,7 @@
 #define PROJECT_H_LCSDWOGL
 
 #include "TranslationUnit.h"
+#include "CompilerFlagCache.h"
 #include "TypeAlias.h"
 #include <string>
 #include <vector>
@@ -9,19 +10,15 @@
 #include <unordered_set>
 #include <vector>
 #include <memory>
-#include <shared_mutex>
 #include <type_traits>
 #include <leveldb/db.h>
 #include <clang-c/Index.h>
-#include <clang-c/CXCompilationDatabase.h>
 
 namespace symdb {
 
-using FsPathVec = std::vector<fspath>;
-using FsPathSet = std::set<fspath>;
-
 using SmartLevelDBPtr = std::unique_ptr< leveldb::DB >;
 using SmartCXIndex = RawPointerWrap<CXIndex>;
+using TranslationUnitPtr = std::shared_ptr<TranslationUnit>;
 
 class DB_SymbolInfo;
 class BatchWriter;
@@ -54,8 +51,6 @@ using ProjectPtr = std::shared_ptr<Project>;
 
 class Project : public std::enable_shared_from_this<Project>
 {
-    using ModuleCompileFlagsMap = std::map<std::string, StringVecPtr>;
-    using RelativeDirModuleMap = std::map<std::string, std::string>;
     friend class BatchWriter;
 
 public:
@@ -70,6 +65,7 @@ public:
 
     void ChangeHome(const fspath &new_home);
 
+    void HandleFileCreate(int wd, const std::string &path);
     void HandleFileModified(int wd, const std::string &path);
     void HandleFileDeleted(int wd, const std::string &path);
 
@@ -81,9 +77,13 @@ public:
 
     const FsPathSet& abs_src_paths() const { return abs_src_paths_; }
 
+    const std::string& name() const { return name_; }
+
     const fspath& home_path() const { return home_path_; }
 
     bool IsWatchFdInList(int file_wd) const;
+
+    bool IsFileExcluded(const fspath &path) const;
 
     void SetConfig(std::shared_ptr<ProjectConfig> config) {
         config_ = config;
@@ -96,16 +96,17 @@ private:
 
     void InitializeLevelDB(bool create_if_missing, bool error_if_exists);
 
-    void ClangParseFile(fspath home_path,
+    void ClangParseFile(SmartCXIndex cx_index,
+                        fspath home_path,
                         fspath abs_path,
                         StringVecPtr compile_flags);
 
-    void OnParseCompleted(fspath relative_path);
+    void RemoveParsingFile(fspath relative_path);
 
     void WriteCompiledFile(const fspath &relative_path,
                            const fspath &abs_path,
                            const std::string &md5,
-                           const SymbolMap &new_symbols);
+                           TranslationUnitPtr tu);
 
     std::string MakeFileInfoKey(const fspath &file_path) const;
     std::string MakeFileSymbolKey(const fspath &file_rel_path) const;
@@ -129,9 +130,9 @@ private:
     void AddSymbolLocation(DB_SymbolInfo &st, const std::string &module_name, const Location &location);
     bool RemoveSymbolLocation(DB_SymbolInfo &st, const std::string &module_name);
 
-    void BuildFile(const fspath &abs_path);
+    void BuildFile(SmartCXIndex cx_index, const fspath &abs_path);
 
-    void UpdateSubDirs();
+    void UpdateWatchDirs();
 
     void StartForceSyncTimer();
     void StartSmartSyncTimer();
@@ -143,20 +144,18 @@ private:
     void DeleteUnexistFile(const fspath &deleted_path);
     void LoadCmakeCompilationInfo(const fspath &build_path);
 
-    void BuildModuleFlags();
+    void LoadCmakeCompilationInfoFromClangDatabase(const fspath &build_path);
 
-    FsPathSet GetAllSubDirs();
+    FsPathSet GetWatchDirs();
 
     void AddFileWatch(const fspath &path);
     void RemoveFileWatch(const fspath &path);
 
 private:
-    std::string proj_name_;
+    std::string name_;
     fspath home_path_; // it's absolute, dito
     fspath cmake_file_path_;
-    SmartCXIndex cx_index_;
     SmartLevelDBPtr symbol_db_;
-    FsPathSet all_sub_dirs_;
     FsPathSet abs_src_paths_;
     FsPathSet in_parsing_files_; // relative path
     FsPathVec modified_files_;
@@ -164,10 +163,8 @@ private:
     boost::asio::deadline_timer force_sync_timer_;
     std::map<int, WatcherPtr> watchers_;
 
-    ModuleCompileFlagsMap module_flags_map_;
-    RelativeDirModuleMap rel_dir_module_map_;
+    CompilerFlagCache flag_cache_;
     int64_t cmake_file_last_mtime_;
-    mutable std::shared_mutex module_mutex_;
     std::shared_ptr<ProjectConfig> config_;
 };
 

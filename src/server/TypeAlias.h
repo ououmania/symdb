@@ -1,6 +1,7 @@
 # pragma once
 
 #include <vector>
+#include <set>
 #include <string>
 #include <memory>
 #include <type_traits>
@@ -19,9 +20,15 @@ using AsioStreamPtr = std::unique_ptr<boost::asio::posix::stream_descriptor>;
 using StringVec = std::vector<std::string>;
 using StringVecPtr = std::shared_ptr<StringVec>;
 using fspath = filesystem::path;
+using FsPathVec = std::vector<fspath>;
+using FsPathSet = std::set<fspath>;
 
 template <class T>
 using RawPointerWrap = std::shared_ptr<typename std::remove_pointer<T>::type >;
+
+template <class T, class Deleter>
+using UniqueRawPointerWrap = std::unique_ptr<typename std::remove_pointer<T>::type,
+      Deleter>;
 
 #if USE_STD_FILESYSTEM
 inline time_t last_wtime(const fspath &path) {

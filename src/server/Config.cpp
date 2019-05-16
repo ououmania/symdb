@@ -177,45 +177,35 @@ void Config::InitDefaultIncDirs(const pugi::xml_node &root)
             default_inc_dirs_.push_back(x.node().child_value());
         }
     } else {
-        default_inc_dirs_ = {
-            "-isystem", "/usr/local/include/",
-            "-isystem", "/usr/include/c++/8.3.0",
-            "-isystem", "/usr/include/c++/8.3.0/x86_64-pc-linux-gnu",
-            "-isystem", "/usr/include/",
-            "-isystem", "/usr/lib/gcc/x86_64-pc-linux-gnu/8.3.0/include-fixed",
-            "-isystem", "/usr/lib/gcc/x86_64-pc-linux-gnu/8.3.0/include/",
-        };
-    }
-
-
-    // gdb doesn't work well with popen
-
-    /*const std::string command = "g++ -E -x c++ - -v < /dev/null 2>&1";
-    const std::string kSysIncSearchBegin = "#include <...> search starts here:";
-    const std::string kSysIncSearchEnd = "End of search list.";
-    FILE *stream = popen(command.c_str(), "r");
-    if (stream == nullptr) {
-        THROW_EXCEPTION_AT_FILE_LINE("popen error: %s", strerror(errno));
-    }
-    std::vector<std::string> default_inc_dirs;
-    bool is_started = false;
-    char line[4096];
-    while (fgets(line, 4096, stream) != nullptr) {
-        std::istringstream iss { line };
-        std::string str_line;
-        std::getline(iss, str_line, '\n');
-        boost::trim(str_line);
-        if (is_started && str_line.find(kSysIncSearchEnd) != std::string::npos) {
-            break;
-        } else if (is_started) {
-            LOG_DEBUG << "Add default inc dir: " << str_line;
-            default_inc_dirs_.push_back("-isystem");
-            default_inc_dirs_.push_back(str_line);
-        } else if (strstr(line, kSysIncSearchBegin.c_str()) != nullptr) {
-            is_started = true;
+        const std::string command = "g++ -E -x c++ - -v < /dev/null 2>&1";
+        const std::string kSysIncSearchBegin = "#include <...> search starts here:";
+        const std::string kSysIncSearchEnd = "End of search list.";
+        FILE *stream = popen(command.c_str(), "r");
+        if (stream == nullptr) {
+            THROW_AT_FILE_LINE("popen error: %s", strerror(errno));
         }
+
+        const char *unwanted = " \r\t\n";
+
+        std::vector<std::string> default_inc_dirs;
+        bool is_started = false;
+        char line[4096];
+        while (fgets(line, 4096, stream) != nullptr) {
+            char *start = line + strspn(line, unwanted);
+            char *end = start + strcspn(start, unwanted);
+            std::string str_line { start, end };
+            if (is_started && str_line.find(kSysIncSearchEnd) != std::string::npos) {
+                break;
+            } else if (is_started) {
+                LOG_DEBUG << "Add default inc dir: " << str_line;
+                default_inc_dirs_.push_back("-isystem");
+                default_inc_dirs_.push_back(str_line);
+            } else if (strstr(line, kSysIncSearchBegin.c_str()) != nullptr) {
+                is_started = true;
+            }
+        }
+        pclose(stream);
     }
-    pclose(stream);*/
 }
 
 bool Config::IsFileExcluded(const fspath &path) const {

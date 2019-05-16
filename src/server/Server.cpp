@@ -40,7 +40,7 @@ void Server::Run(const std::string &listen_path)
     inotify_stream_->non_blocking();
 
     inotify_stream_->async_wait(AsioStream::wait_read,
-        [this] (const auto &ec) {
+        [this] (const boost::system::error_code &ec) {
             if (!ec) {
                 this->HandleInotifyReadable();
             } else {
@@ -135,16 +135,22 @@ void Server::HandleInotifyReadable()
             continue;
         }
 
+        offset += sizeof(inotify_event) + event->len;
+
+        // VIM creates the weried file 4913...
+        if (!strncmp(event->name, "4913", event->len)) {
+            continue;
+        }
+
         try {
             HandleInotifyEvent(event);
         } catch(const std::exception &e) {
             LOG_ERROR << "exception: " << e.what();
         }
-        offset += sizeof(inotify_event) + event->len;
     }
 
     inotify_stream_->async_wait(AsioStream::wait_read,
-        [this] (const auto &ec) {
+        [this] (const boost::system::error_code &ec) {
             if (!ec) {
                 this->HandleInotifyReadable();
             }
@@ -166,6 +172,10 @@ void Server::HandleInotifyEvent(const inotify_event *event)
     if (!project) {
         LOG_ERROR << "GetProjectByWatcher failed, watch_fd=" << event->wd;
         return;
+    }
+
+    if ((event->mask & IN_CREATE) == IN_MODIFY) {
+        project->HandleFileCreate(event->wd, event->name);
     }
 
     if ((event->mask & IN_MODIFY) == IN_MODIFY) {

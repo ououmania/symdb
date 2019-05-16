@@ -1,10 +1,6 @@
 #include "Server.h"
 #include "Config.h"
-#include "Project.h"
 #include "util/Logger.h"
-#include "util/Exceptions.h"
-#include <iostream>
-#include <fstream>
 #include <cstdlib>
 
 int main(int argc, char *argv[])
