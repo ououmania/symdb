@@ -6,11 +6,13 @@
 
 namespace symdb {
 
+using StringVec = std::vector<std::string>;
+
 class Command
 {
     using CmdMap = std::map<std::string, Command>;
     using ArgVector = std::vector<std::string>;
-    using CliHandler = std::function<void(const ArgVector&)>;
+    using CliHandler = std::function<void(ArgVector&)>;
 
 public:
     Command& SetHandler(CliHandler handler) {
@@ -36,28 +38,10 @@ private:
 
 class SymShell
 {
-    using StringVec = std::vector<std::string>;
 public:
     void Init(boost::asio::io_service &io_context, const std::string &history_file);
 
     void WaitInput();
-
-    // args: <proj_name> <home_dir>
-    void CreateProject(const StringVec &args);
-
-    void UpdateProject(const StringVec &args);
-
-    // args: <proj_name...>
-    void DeleteProject(const StringVec &args);
-
-    void ListProjects(const StringVec &args);
-
-    void ListProjectFiles(const StringVec &args);
-
-    void GetSymbolDefinition(const StringVec &args);
-    void GetSymbolReference(const StringVec &args);
-
-    void GetFileSymbols(const StringVec &args);
 
     void ProcessCommad(const char *cmd);
 

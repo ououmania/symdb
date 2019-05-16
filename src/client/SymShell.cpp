@@ -9,12 +9,78 @@
 #include <readline/history.h>
 #include <sys/signalfd.h>
 
-#ifndef ERROR
-    #define ERROR(fmt) std::cerr << fmt
-    #define ERROR_LN(fmt) ERROR(fmt) << std::endl
-#endif
-
 namespace symdb {
+
+template<int... Is>
+struct seq { };
+
+template<int N, int... Is>
+struct gen_seq : gen_seq<N - 1, N - 1, Is...> { };
+
+template<int... Is>
+struct gen_seq<0, Is...> : seq<Is...> { };
+
+template <size_t Argc>
+struct SessionMemberFunc;
+
+template <>
+struct SessionMemberFunc<0> {
+    using type = void(Session::*)();
+};
+
+template <>
+struct SessionMemberFunc<1> {
+    using type = void(Session::*)(const std::string &);
+};
+
+template <>
+struct SessionMemberFunc<2> {
+    using type = void(Session::*)(const std::string&, const std::string&);
+};
+
+template <>
+struct SessionMemberFunc<3> {
+    using type = void(Session::*)(const std::string&, const std::string&, const std::string&);
+};
+
+template <>
+struct SessionMemberFunc<4> {
+    using type = void(Session::*)(const std::string&, const std::string&,
+                                  const std::string&, const std::string&);
+};
+
+template <size_t MinArgc, size_t MaxArgc = MinArgc>
+class CommandRunner {
+    using FuncType = typename SessionMemberFunc<MaxArgc>::type;
+public:
+    CommandRunner(const std::string &usage, FuncType func)
+        : usage_ { usage },
+          func_ { func }
+    {
+    }
+
+    template<int... Is>
+    void helper(StringVec& args, seq<Is...>)
+    {
+        boost::asio::io_service io_service;
+        symdb::Session session(io_service, kDefaultSockPath);
+        (session.*func_)(args[Is]...);
+    }
+
+    void operator()(StringVec &args) {
+        if (args.size() < MinArgc || args.size() > MaxArgc) {
+            std::cerr << "usage: " << usage_ << std::endl;
+            return;
+        }
+
+        args.resize(MaxArgc);
+        helper(args, gen_seq<MaxArgc> {});
+    }
+
+private:
+    std::string usage_;
+    FuncType func_;
+};
 
 std::string Command::GetCmdKey(const std::string &name)
 {
@@ -66,14 +132,33 @@ void Command::Process(const std::string& command)
 void SymShell::Init(boost::asio::io_service &io_context,
     const std::string &history_file)
 {
-    root_cmd_["project"]["create"].SetHandler(std::bind(&SymShell::CreateProject, this, std::placeholders::_1));
-    root_cmd_["project"]["update"].SetHandler(std::bind(&SymShell::UpdateProject, this, std::placeholders::_1));
-    root_cmd_["project"]["delete"].SetHandler(std::bind(&SymShell::DeleteProject, this, std::placeholders::_1));
-    root_cmd_["project"]["list"].SetHandler(std::bind(&SymShell::ListProjects, this, std::placeholders::_1));
-    root_cmd_["project"]["files"].SetHandler(std::bind(&SymShell::ListProjectFiles, this, std::placeholders::_1));
-    root_cmd_["symbol"]["definition"].SetHandler(std::bind(&SymShell::GetSymbolDefinition, this, std::placeholders::_1));
-    root_cmd_["symbol"]["reference"].SetHandler(std::bind(&SymShell::GetSymbolReference, this, std::placeholders::_1));
-    root_cmd_["file"]["symbols"].SetHandler(std::bind(&SymShell::GetFileSymbols, this, std::placeholders::_1));
+    auto &project_cmd = root_cmd_["project"];
+    project_cmd["create"].SetHandler(CommandRunner<2> {
+        "project create <name> <home>", &Session::create_project });
+
+    project_cmd["update"].SetHandler(CommandRunner<1> {
+        "project update <name>",  &Session::update_project });
+
+    project_cmd["delete"].SetHandler(CommandRunner<1> {
+        "project delete <name>",  &Session::delete_project });
+
+    project_cmd["list"].SetHandler(CommandRunner<0> {
+        "project list project",  &Session::list_projects });
+
+    project_cmd["files"].SetHandler(CommandRunner<1> {
+        "project files <proj_name>",  &Session::list_project_files });
+
+    auto &sym_cmd = root_cmd_["project"];
+    sym_cmd["definition"].SetHandler(CommandRunner<2, 3> {
+        "symbol definition <proj_name> <symbol> [path]",
+        &Session::get_symbol_definition });
+
+    sym_cmd["reference"].SetHandler(CommandRunner<2> {
+        "symbol reference <proj_name> <symbol> [path]",
+        &Session::get_symbol_references });
+
+    root_cmd_["file"]["symbols"].SetHandler(CommandRunner<2> {
+        "file symbols <proj_name>",  &Session::list_file_symbols });
 
     history_file_ = history_file;
 
@@ -108,7 +193,7 @@ void SymShell::SetupSignal(boost::asio::io_service &io_context)
     signal_stream_->non_blocking();
 
     signal_stream_->async_wait(AsioStream::wait_read,
-        [this] (const auto &ec) {
+        [this] (const boost::system::error_code &ec) {
             this->HandleNewSignal(ec);
         }
     );
@@ -137,7 +222,7 @@ void SymShell::WaitInput()
 {
     if (is_running_) {
         rl_stream_->async_wait(AsioStream::wait_read,
-            [this] (const auto &ec) {
+            [this] (const boost::system::error_code &ec) {
                 this->HandleNewInput(ec);
             }
         );
@@ -204,99 +289,10 @@ void SymShell::HandleNewSignal(boost::system::error_code ec)
     rl_redisplay();
 
     signal_stream_->async_wait(AsioStream::wait_read,
-        [this] (const auto &ec) {
+        [this] (const boost::system::error_code &ec) {
             this->HandleNewSignal(ec);
         }
     );
-}
-
-void SymShell::CreateProject(const StringVec &args)
-{
-    if (args.size() != 2) {
-        ERROR_LN("usage: project create <name> <home>");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.create_project(args[0], args[1]);
-}
-
-void SymShell::UpdateProject(const StringVec &args)
-{
-    if (args.size() != 1) {
-        ERROR_LN("usage: project create <name>");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.update_project(args[0]);
-}
-
-void SymShell::DeleteProject(const StringVec &args)
-{
-    if (args.empty()) {
-        ERROR_LN("usage: project delete <name...>");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.delete_project(args[0]);
-}
-
-void SymShell::ListProjects(const StringVec &args)
-{
-    (void) args;
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.list_projects();
-}
-
-void SymShell::ListProjectFiles(const StringVec &args)
-{
-    if (args.size() != 1) {
-        ERROR_LN("usage: project files <proj_name>");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.list_project_files(args.front());
-}
-
-void SymShell::GetSymbolDefinition(const StringVec &args)
-{
-    if (args.size() != 2 && args.size() != 3) {
-        ERROR_LN("usage: symbol definition <proj_name> <symbol> [path]");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    if (args.size() == 3) {
-        session.get_symbol_definition(args[0], args[1], args[2]);
-    } else {
-        session.get_symbol_definition(args[0], args[1], std::string {});
-    }
-}
-
-void SymShell::GetSymbolReference(const StringVec &args)
-{
-    if (args.size() != 2) {
-        ERROR_LN("usage: symbol reference <proj_name> <symbol>");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.get_symbol_references(args[0], args[1]);
-}
-
-void SymShell::GetFileSymbols(const StringVec &args)
-{
-    if (args.size() != 2) {
-        ERROR_LN("usage: file symbols <proj_name> <relative_path>");
-        return;
-    }
-
-    symdb::Session session(*io_service_, kDefaultSockPath);
-    session.list_file_symbols(args[0], args[1]);
 }
 
 char** SymShell::ReadlineCompletion(const char* text, int start, int end)

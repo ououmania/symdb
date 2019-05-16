@@ -150,7 +150,7 @@ bool Session::send_and_recv(int msg_id, const google::protobuf::Message &body,
     FixedHeader fh;
 
     boost::system::error_code error;
-    boost::asio::read(socket_, boost::asio::buffer(&fh, fh.msg_size),
+    boost::asio::read(socket_, boost::asio::buffer(&fh, sizeof(fh)),
         boost::asio::transfer_exactly(sizeof(fh)), error);
     if (error) {
         LOG_ERROR << "read fixed header error: " << error;
