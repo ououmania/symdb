@@ -1,4 +1,5 @@
 #include "TranslationUnit.h"
+#include "TypeAlias.h"
 #include "ClangUtils.h"
 #include "util/Logger.h"
 #include <iostream>
@@ -26,20 +27,39 @@ TranslationUnit::TranslationUnit(
                             pointer_flags.size(),
                             nullptr,
                             0,
-                            0,
+                            CXTranslationUnit_None,
                             &translation_unit_ );
     if ( failure != CXError_Success ) {
         throw symdb::ClangParseError( failure );
     }
 
     filename_ = filename;
+
+    // CheckClangDiagnostic();
 }
 
 TranslationUnit::~TranslationUnit()
 {
-    if (translation_unit_ != nullptr)
-    {
-        clang_disposeTranslationUnit(translation_unit_);
+    clang_disposeTranslationUnit(translation_unit_);
+}
+
+void TranslationUnit::CheckClangDiagnostic() {
+    unsigned num = clang_getNumDiagnostics(translation_unit_);
+    if (num != 0) {
+        LOG_ERROR << "file=" << filename_ << " nr_diag=" << num;
+    }
+
+    for (unsigned i = 0; i < num; i++) {
+        CXDiagnostic diag = clang_getDiagnostic(translation_unit_, i);
+        if (!diag) {
+            continue;
+        }
+
+        std::string text = CXStringToString(clang_getDiagnosticSpelling(diag));
+        Location location { clang_getDiagnosticLocation(diag) };
+        clang_disposeDiagnostic(diag);
+
+        LOG_ERROR << "diagnostic " << i + 1 << ": " << text << location;
     }
 }
 
@@ -68,9 +88,6 @@ CXChildVisitResult TranslationUnit::VisitCursor(
             auto typeStr = symdb::CXStringToString(clang_getTypeSpelling(cursorType));
             auto cursorKind = clang_getCursorKind(cursor);
             auto kindStr = symdb::CXStringToString(clang_getCursorKindSpelling(cursorKind));
-
-            // LOG_DEBUG << "symbol=" << symbol << ", type=" << typeStr << ", kind="
-            //           << cursorKind << ":" <<  kindStr << ", " << location;
 
             auto usr = symdb::CXStringToString(clang_getCursorUSR(cursor));
 

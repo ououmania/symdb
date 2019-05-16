@@ -47,6 +47,9 @@ public:
     SymbolMap& defined_symbols() { return defined_symbols_; }
 
 private:
+    void CheckClangDiagnostic();
+
+private:
     static CXChildVisitResult VisitCursor(
         CXCursor cursor,
         CXCursor parent,
