@@ -24,7 +24,7 @@ function(add_boost_lib target src_dir)
     add_library( ${target} STATIC ${SRC_FILES} )
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${src_dir})
 
-    set(BOOST_LIBRARIES ${BOOST_LIBRARIES} ${target} CACHE INTERNAL "boost libraries")
+    set(BOOST_LIBRARIES ${BOOST_LIBRARIES} ${target} PARENT_SCOPE )
 endfunction(add_boost_lib)
 
 add_boost_lib(boost_filesystem ${CMAKE_CURRENT_SOURCE_DIR}/libs/filesystem)
