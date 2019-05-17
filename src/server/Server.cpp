@@ -129,13 +129,12 @@ void Server::HandleInotifyReadable()
     for (decltype(avail) offset = 0; offset < avail; ) {
         inotify_event *event = (inotify_event*)(buffer + offset);
 
+        offset += sizeof(inotify_event) + event->len;
+
         if (event->len == 0) {
-            offset += sizeof(inotify_event);
             LOG_WARN << "event=" << event->mask << ", watch_fd=" << event->wd;
             continue;
         }
-
-        offset += sizeof(inotify_event) + event->len;
 
         // VIM creates the weried file 4913...
         if (!strncmp(event->name, "4913", event->len)) {

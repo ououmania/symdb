@@ -70,7 +70,7 @@ private:
 ProjectFileWatcher::ProjectFileWatcher(const fspath &abs_path)
     : abs_path_ { abs_path },
       fd_ { -1 } {
-    int mask = (IN_CREATE | IN_CLOSE_WRITE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO);
+    int mask = (IN_CREATE | IN_CLOSE_WRITE | IN_DELETE);
     fd_ = inotify_add_watch(ServerInst.inotify_fd(), abs_path.c_str(), mask);
     if (fd_ < 0) {
         THROW_AT_FILE_LINE("inotify_add_watch error: %s", strerror(errno));
@@ -176,22 +176,20 @@ FsPathSet Project::GetWatchDirs() {
             continue;
         }
 
-        if (symutil::path_has_prefix(abs_path, config_->build_path())) {
+        if (IsFileExcluded(abs_path)) {
             continue;
         }
 
         fspath relative_path = filesystem::relative(abs_path, home_path_);
-        sub_dirs.insert(relative_path);
+        LOG_DEBUG << "project=" << name_ << "sub_dir=" << relative_path;
+        sub_dirs.insert(abs_path);
     }
 
     return sub_dirs;
 }
 
 void Project::AddFileWatch(const fspath &path) {
-    if (!path.is_absolute()) {
-        fspath abs_path = filesystem::absolute(path, home_path_);
-        return AddFileWatch(abs_path);
-    }
+    assert(path.is_absolute());
 
     auto module_name = GetModuleName(path);
     if (module_name.empty()) {
@@ -209,10 +207,7 @@ void Project::AddFileWatch(const fspath &path) {
 }
 
 void Project::RemoveFileWatch(const fspath &path) {
-    if (!path.is_absolute()) {
-        fspath abs_path = filesystem::absolute(path, home_path_);
-        return RemoveFileWatch(abs_path);
-    }
+    assert(!path.is_absolute());
 
     LOG_INFO << "project=" << name_ << " path=" << path;
 
@@ -237,6 +232,9 @@ void Project::UpdateWatchDirs() {
     }
 
     FsPathSet new_watch_dirs = GetWatchDirs();
+    LOG_DEBUG << "project=" << name_ << " new_watch_dirs="
+              << new_watch_dirs.size();
+
     for (const auto &fs_path : new_watch_dirs) {
         if (old_watch_dirs.find(fs_path) == old_watch_dirs.end()) {
             AddFileWatch(fs_path);
@@ -929,6 +927,10 @@ bool Project::RemoveSymbolLocation(DB_SymbolInfo &db_info,
 }
 
 bool Project::IsFileExcluded(const fspath &path) const {
+
+    if (symutil::path_has_prefix(path, config_->build_path())) {
+        return true;
+    }
     return config_->IsFileExcluded(path);
 }
 
