@@ -13,6 +13,7 @@ cmake_policy(SET CMP0077 NEW)
 include(cmake/protobuf.cmake)
 include(cmake/snappy.cmake)
 include(cmake/leveldb.cmake)
+include(cmake/pugixml.cmake)
 
 include_directories(${PROTOBUF_INCLUDE_DIR})
 

@@ -2,6 +2,7 @@
 #include "Session.h"
 #include "util/Exceptions.h"
 #include "util/NetDefine.h"
+#include "util/Logger.h"
 #include <iostream>
 #include <boost/filesystem.hpp>
 #include <cstdio>
@@ -148,7 +149,7 @@ void SymShell::Init(boost::asio::io_service &io_context,
     project_cmd["files"].SetHandler(CommandRunner<1> {
         "project files <proj_name>",  &Session::list_project_files });
 
-    auto &sym_cmd = root_cmd_["project"];
+    auto &sym_cmd = root_cmd_["symbol"];
     sym_cmd["definition"].SetHandler(CommandRunner<2, 3> {
         "symbol definition <proj_name> <symbol> [path]",
         &Session::get_symbol_definition });
@@ -254,6 +255,7 @@ void SymShell::ReadLineHandler(char *line)
 }
 
 void SymShell::ProcessCommad(const char *cmd) {
+    LOG_DEBUG << "cmd: "  << cmd;
     try {
         root_cmd_.Process(cmd);
         write_history(history_file_.c_str());
@@ -268,6 +270,7 @@ void SymShell::HandleNewInput(boost::system::error_code ec)
         rl_callback_read_char();
         WaitInput();
     } else {
+        LOG_ERROR << "readline error: " << ec;
         rl_callback_handler_remove();
     }
 }

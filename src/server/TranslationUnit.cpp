@@ -30,7 +30,7 @@ TranslationUnit::TranslationUnit(
                             CXTranslationUnit_None,
                             &translation_unit_ );
     if ( failure != CXError_Success ) {
-        throw symdb::ClangParseError( failure );
+        throw ClangParseError( failure );
     }
 
     filename_ = filename;
@@ -38,8 +38,7 @@ TranslationUnit::TranslationUnit(
     // CheckClangDiagnostic();
 }
 
-TranslationUnit::~TranslationUnit()
-{
+TranslationUnit::~TranslationUnit() {
     clang_disposeTranslationUnit(translation_unit_);
 }
 
@@ -77,20 +76,13 @@ CXChildVisitResult TranslationUnit::VisitCursor(
 {
     (void) parent;
 
-    CXSourceLocation cursor_location = clang_getCursorLocation(cursor);
-    Location location(cursor_location);
+    Location location(clang_getCursorLocation(cursor));
 
     TranslationUnit *unit = reinterpret_cast<TranslationUnit*>(client_data);
     if (location.filename() == unit->filename_ && clang_isCursorDefinition(cursor)) {
-        auto symbol = symdb::CXStringToString(clang_getCursorSpelling(cursor));
+        auto symbol = CXStringToString(clang_getCursorSpelling(cursor));
         if (!symbol.empty() && IsWantedCursor(cursor)) {
-            CXType cursorType = clang_getCursorType(cursor);
-            auto typeStr = symdb::CXStringToString(clang_getTypeSpelling(cursorType));
-            auto cursorKind = clang_getCursorKind(cursor);
-            auto kindStr = symdb::CXStringToString(clang_getCursorKindSpelling(cursorKind));
-
-            auto usr = symdb::CXStringToString(clang_getCursorUSR(cursor));
-
+            auto usr = CXStringToString(clang_getCursorUSR(cursor));
             if (usr.empty()) {
                 LOG_ERROR << "No USR name at " << location;
             } else {
@@ -115,7 +107,7 @@ Location TranslationUnit::GetSourceLocation(
     CXCursor cursor = GetReferencedCursor(filename, line, column);
 
     CXString cx_symbol = clang_getCursorUSR(cursor);
-    auto symbol = symdb::CXStringToString(cx_symbol);
+    auto symbol = CXStringToString(cx_symbol);
     if (symbol.empty()) {
         return Location();
     }
@@ -126,11 +118,10 @@ Location TranslationUnit::GetSourceLocation(
 std::string TranslationUnit::GetReferencedSymbol(
     const std::string &file,
     unsigned int line,
-    unsigned int column) const
-{
+    unsigned int column) const {
     CXCursor cursor = GetReferencedCursor(file, line, column);
     CXString cx_symbol = clang_getCursorUSR(cursor);
-    auto symbol = symdb::CXStringToString(cx_symbol);
+    auto symbol = CXStringToString(cx_symbol);
 
     return symbol;
 }
@@ -146,7 +137,7 @@ CXCursor TranslationUnit::GetReferencedCursor(
     CXCursor referenced_cursor = clang_getCursorReferenced(cursor);
     auto canonical_cursor = clang_getCanonicalCursor( referenced_cursor );
 
-    if ( !symdb::CursorIsValid( canonical_cursor ) ) {
+    if ( !CursorIsValid( canonical_cursor ) ) {
         return referenced_cursor;
     }
 

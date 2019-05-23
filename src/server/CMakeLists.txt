@@ -4,7 +4,11 @@ set(TARGET symdb)
 
 find_library(Clang_LIBRARY NAMES clang)
 
-add_symbol_executable(${TARGET} ${Clang_LIBRARY} ${LEVELDB_LIBRARY} snappy)
+add_symbol_executable(${TARGET}
+                      ${Clang_LIBRARY} 
+                      ${LEVELDB_LIBRARY}
+                      ${SNAPPY_LIBRARY}
+                      ${PUGIXML_LIBRARY} )
 
 add_custom_target( copy_symdb_config
                    COMMAND cmake -E copy

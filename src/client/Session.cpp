@@ -179,8 +179,9 @@ bool Session::send_and_recv(int msg_id, const google::protobuf::Message &body,
 
     std::string rsp_str = rsp.ShortDebugString();
 
-    LOG_STATUS << RspType::default_instance().GetTypeName()
+    LOG_STATUS << "" << RspType::default_instance().GetTypeName()
                << ": " << (rsp_str.empty() ? "ok" : rsp_str);
+
     return true;
 }
 

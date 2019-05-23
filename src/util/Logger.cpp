@@ -84,6 +84,7 @@ void BoostLogger::Init(LogLevel level, const std::string &log_file)
     typedef sinks::synchronous_sink< sinks::text_ostream_backend > text_sink;
     boost::shared_ptr<text_sink> console(new text_sink(backend));
     console->set_filter(severity >= LogLevel::STATUS);
+    console->locked_backend()->auto_flush(true);
     core->add_sink(console);
 
     auto stream = boost::make_shared<std::ofstream>(log_file, std::ios::app);

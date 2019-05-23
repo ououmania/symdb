@@ -33,13 +33,24 @@ public:
         batch_.Put(key, value);
     }
 
+    void Delete(const std::string &key) {
+        batch_.Delete(key);
+    }
+
     template <typename PBType>
     void PutSymbol(const std::string &symbol, const PBType &pb) {
         batch_.Put(project_->MakeSymbolKey(symbol), pb.SerializeAsString());
     }
 
-    void Delete(const std::string &key) {
-        batch_.Delete(key);
+    template <typename PBType>
+    void PutFile(const fspath &path, const PBType &pb) {
+        LOG_DEBUG << "project=" << project_->name() << ", path=" << path;
+        batch_.Put(project_->MakeFileInfoKey(path), pb.SerializeAsString());
+    }
+
+    void DeleteFile(const fspath &path) {
+        LOG_DEBUG << "project=" << project_->name() << ", path=" << path;
+        batch_.Delete(project_->MakeFileInfoKey(path));
     }
 
     void WriteSrcPath() {
@@ -162,6 +173,8 @@ void Project::InitializeLevelDB(bool create_if_missing, bool error_if_exists) {
 FsPathSet Project::GetWatchDirs() {
     FsPathSet sub_dirs;
 
+    LOG_DEBUG << "project=" << name_ << " home=" << home_path_;
+
     filesystem::recursive_directory_iterator rdi(home_path_);
     filesystem::recursive_directory_iterator end_rdi;
     for (; rdi != end_rdi; ++rdi) {
@@ -181,7 +194,12 @@ FsPathSet Project::GetWatchDirs() {
         }
 
         fspath relative_path = filesystem::relative(abs_path, home_path_);
-        LOG_DEBUG << "project=" << name_ << "sub_dir=" << relative_path;
+        auto module_name = flag_cache_.GetModuleName(relative_path);
+        if (module_name.empty()) {
+            continue;
+        }
+
+        LOG_DEBUG << "project=" << name_ << " sub_dir=" << relative_path;
         sub_dirs.insert(abs_path);
     }
 
@@ -207,7 +225,7 @@ void Project::AddFileWatch(const fspath &path) {
 }
 
 void Project::RemoveFileWatch(const fspath &path) {
-    assert(!path.is_absolute());
+    assert(path.is_absolute());
 
     LOG_INFO << "project=" << name_ << " path=" << path;
 
@@ -448,8 +466,7 @@ void Project::WriteCompiledFile(const fspath &relative_path,
     file_table.set_last_mtime(last_mtime);
     file_table.set_content_md5(md5);
 
-    auto filekey = MakeFileInfoKey(relative_path.string());
-    batch.Put(filekey, file_table.SerializeAsString());
+    batch.PutFile(relative_path, file_table);
 
     if (is_symbol_changed) {
         auto file_symbol_key = MakeFileSymbolKey(relative_path.string());
@@ -773,7 +790,9 @@ void Project::StartForceSyncTimer() {
     }
 
     auto pt_tm = posix_time::to_tm(day + duration);
-    LOG_DEBUG << "next force sync at: " << asctime(&pt_tm);
+    char time_buf[BUFSIZ];
+    (void) strftime(time_buf, sizeof(time_buf), "%F %H:%M", &pt_tm);
+    LOG_DEBUG << "project=" << name_ << " next force sync at: " << time_buf;
 
     force_sync_timer_.expires_from_now(duration);
     force_sync_timer_.async_wait(
@@ -856,8 +875,7 @@ void Project::DeleteUnexistFile(const fspath &deleted_path)
 
     BatchWriter batch { this };
 
-    std::string file_info_key = MakeFileInfoKey(deleted_path);
-    batch.Delete(file_info_key);
+    batch.DeleteFile(deleted_path);
 
     std::string module_name = GetModuleName(deleted_path);
 

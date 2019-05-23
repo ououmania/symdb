@@ -7,3 +7,6 @@
 [submodule "third_party/snappy"]
 	path = third_party/snappy
 	url = https://github.com/google/snappy
+[submodule "third_party/pugixml"]
+	path = third_party/pugixml
+	url = https://github.com/zeux/pugixml
