@@ -157,7 +157,6 @@ bool TranslationUnit::IsWantedCursor(CXCursor cursor)
     case CXCursorKind::CXCursor_StructDecl:
     case CXCursorKind::CXCursor_TypedefDecl:
     case CXCursorKind::CXCursor_TypeAliasDecl:
-    case CXCursorKind::CXCursor_FunctionTemplate:
     case CXCursorKind::CXCursor_FunctionDecl:
     case CXCursorKind::CXCursor_VarDecl:
         return clang_Cursor_getStorageClass(cursor) != CX_StorageClass::CX_SC_Static;
