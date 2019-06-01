@@ -11,8 +11,7 @@ using StringVec = std::vector<std::string>;
 class Command
 {
     using CmdMap = std::map<std::string, Command>;
-    using ArgVector = std::vector<std::string>;
-    using CliHandler = std::function<void(ArgVector&)>;
+    using CliHandler = std::function<void(StringVec&)>;
 
 public:
     Command& SetHandler(CliHandler handler) {

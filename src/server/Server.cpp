@@ -173,16 +173,21 @@ void Server::HandleInotifyEvent(const inotify_event *event)
         return;
     }
 
-    if ((event->mask & IN_CREATE) == IN_MODIFY) {
-        project->HandleFileCreate(event->wd, event->name);
+    bool is_dir = !!(event->mask & IN_ISDIR);
+    if (event->mask & (IN_CREATE | IN_MOVED_TO)) {
+        project->HandleEntryCreate(event->wd, is_dir, event->name);
     }
 
-    if ((event->mask & IN_MODIFY) == IN_MODIFY) {
+    if (event->mask & (IN_MODIFY | IN_CLOSE_WRITE)) {
         project->HandleFileModified(event->wd, event->name);
     }
 
-    if ((event->mask & IN_DELETE) == IN_DELETE) {
-        project->HandleFileDeleted(event->wd, event->name);
+    if (event->mask & IN_DELETE) {
+        project->HandleEntryDeleted(event->wd, is_dir, event->name);
+    }
+
+    if (event->mask & IN_DELETE_SELF) {
+        project->HandleWatchedDirDeleted(event->wd, event->name);
     }
 }
 

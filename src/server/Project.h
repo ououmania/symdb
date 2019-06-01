@@ -29,6 +29,11 @@ struct ProjectFileInfo {
     std::string content_md5;
 };
 
+struct CompiledFileInfo {
+    std::string md5;
+    time_t last_mtime; // the last_mtime when the file is compiled
+};
+
 class ProjectFileWatcher {
 public:
     explicit ProjectFileWatcher(const fspath &path);
@@ -65,9 +70,10 @@ public:
 
     void ChangeHome(const fspath &new_home);
 
-    void HandleFileCreate(int wd, const std::string &path);
+    void HandleEntryCreate(int wd, bool is_dir, const std::string &path);
+    void HandleEntryDeleted(int wd, bool is_dir, const std::string &path);
     void HandleFileModified(int wd, const std::string &path);
-    void HandleFileDeleted(int wd, const std::string &path);
+    void HandleWatchedDirDeleted(int wd, const std::string &path);
 
     bool LoadFileSymbolInfo(const fspath &path, SymbolMap &symbols) const;
 
@@ -103,10 +109,7 @@ private:
 
     void RemoveParsingFile(fspath relative_path);
 
-    void WriteCompiledFile(const fspath &relative_path,
-                           const fspath &abs_path,
-                           const std::string &md5,
-                           TranslationUnitPtr tu);
+    void WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path, CompiledFileInfo info);
 
     std::string MakeFileInfoKey(const fspath &file_path) const;
     std::string MakeFileSymbolKey(const fspath &file_rel_path) const;

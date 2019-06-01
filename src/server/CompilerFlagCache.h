@@ -12,7 +12,7 @@ class Project;
 class CompilerFlagCache
 {
     using ModuleCompileFlagsMap = std::map<std::string, StringVecPtr>;
-    using RelativeDirModuleMap = std::map<std::string, std::string>;
+    using RelativeDirModuleMap = std::map<fspath, std::string>;
 
 public:
     explicit CompilerFlagCache(Project *project)
@@ -27,6 +27,12 @@ public:
                  FsPathSet &abs_src_paths);
 
     std::string GetModuleName(const fspath &path) const;
+
+    // This happens when directory is created under a module. We assume all
+    // the files of a module share the same compiler flags. Therefore, path
+    // will inherit the module name of its parent.
+    void AddDirToModule(const fspath &path, const std::string &module_name);
+    bool TryRemoveDir(const fspath &path);
 
 private:
     void LoadCompileCommandsJsonFile(const fspath &build_path,

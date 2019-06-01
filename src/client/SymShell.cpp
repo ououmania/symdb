@@ -51,10 +51,10 @@ struct SessionMemberFunc<4> {
 };
 
 template <size_t MinArgc, size_t MaxArgc = MinArgc>
-class CommandRunner {
+class CommandDelegator {
     using FuncType = typename SessionMemberFunc<MaxArgc>::type;
 public:
-    CommandRunner(const std::string &usage, FuncType func)
+    CommandDelegator(const std::string &usage, FuncType func)
         : usage_ { usage },
           func_ { func }
     {
@@ -107,7 +107,7 @@ Command& Command::operator[](const std::string& name)
 
 void Command::Process(const std::string& command)
 {
-    ArgVector args;
+    StringVec args;
     Command* sub_cmd = this;
 
     std::stringstream ss;
@@ -134,31 +134,31 @@ void SymShell::Init(boost::asio::io_service &io_context,
     const std::string &history_file)
 {
     auto &project_cmd = root_cmd_["project"];
-    project_cmd["create"].SetHandler(CommandRunner<2> {
+    project_cmd["create"].SetHandler(CommandDelegator<2> {
         "project create <name> <home>", &Session::create_project });
 
-    project_cmd["update"].SetHandler(CommandRunner<1> {
+    project_cmd["update"].SetHandler(CommandDelegator<1> {
         "project update <name>",  &Session::update_project });
 
-    project_cmd["delete"].SetHandler(CommandRunner<1> {
+    project_cmd["delete"].SetHandler(CommandDelegator<1> {
         "project delete <name>",  &Session::delete_project });
 
-    project_cmd["list"].SetHandler(CommandRunner<0> {
+    project_cmd["list"].SetHandler(CommandDelegator<0> {
         "project list project",  &Session::list_projects });
 
-    project_cmd["files"].SetHandler(CommandRunner<1> {
+    project_cmd["files"].SetHandler(CommandDelegator<1> {
         "project files <proj_name>",  &Session::list_project_files });
 
     auto &sym_cmd = root_cmd_["symbol"];
-    sym_cmd["definition"].SetHandler(CommandRunner<2, 3> {
+    sym_cmd["definition"].SetHandler(CommandDelegator<2, 3> {
         "symbol definition <proj_name> <symbol> [path]",
         &Session::get_symbol_definition });
 
-    sym_cmd["reference"].SetHandler(CommandRunner<2> {
+    sym_cmd["reference"].SetHandler(CommandDelegator<2> {
         "symbol reference <proj_name> <symbol> [path]",
         &Session::get_symbol_references });
 
-    root_cmd_["file"]["symbols"].SetHandler(CommandRunner<2> {
+    root_cmd_["file"]["symbols"].SetHandler(CommandDelegator<2> {
         "file symbols <proj_name>",  &Session::list_file_symbols });
 
     history_file_ = history_file;
@@ -248,8 +248,8 @@ void SymShell::ReadLineHandler(char *line)
     } else {
         if (*line) {
             add_history(line);
+            SymShell::Instance().ProcessCommad(line);
         }
-        SymShell::Instance().ProcessCommad(line);
         free(line);
     }
 }

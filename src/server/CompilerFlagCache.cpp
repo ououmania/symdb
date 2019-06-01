@@ -270,7 +270,7 @@ std::string CompilerFlagCache::GetModuleName(const fspath &path) const {
     } else {
         relative_dir = filesystem::relative(path.parent_path(), project_->home_path());
     }
-    auto it = rel_dir_module_map_.find(relative_dir.string());
+    auto it = rel_dir_module_map_.find(relative_dir);
     if (it != rel_dir_module_map_.end()) {
         return it->second;
     }
@@ -295,20 +295,21 @@ void CompilerFlagCache::ParseFileCommand(const CommandParserType &parser,
 
     fspath work_dir_path { parser.GetWorkDirectory() };
 
-    auto module_name = filesystem::relative(work_dir_path, build_path).string();
+    auto module_home = filesystem::relative(work_dir_path, build_path);
+    const auto &module_name = module_home.string();
     fspath relative_dir = filesystem::relative(
         abs_file_path.parent_path(), project_->home_path());
 
     LOG_DEBUG << "file=" << abs_file_path << ", module=" << module_name
               << " relative_dir=" << relative_dir;
 
-    rel_dir_module_map_[relative_dir.string()] = module_name;
+    rel_dir_module_map_[relative_dir] = module_name;
 
     if (module_flags_.find(module_name) != module_flags_.end()) {
         return;
     }
 
-    rel_dir_module_map_[module_name] = module_name;
+    rel_dir_module_map_[module_home] = module_name;
 
     std::list<std::string> flags = parser.GetFlags();
 
@@ -324,6 +325,51 @@ void CompilerFlagCache::ParseFileCommand(const CommandParserType &parser,
               std::back_inserter(*final_flags));
 
     module_flags_[module_name] = final_flags;
+}
+
+void CompilerFlagCache::AddDirToModule(const fspath &path,
+    const std::string &module_name) {
+    assert(symutil::path_has_prefix(path, project_->home_path()));
+    assert(filesystem::is_directory(path));
+    assert(rel_dir_module_map_.find(path) == rel_dir_module_map_.end());
+
+    auto relative_dir = filesystem::relative(path, project_->home_path());
+    rel_dir_module_map_[relative_dir] = module_name;
+}
+
+bool CompilerFlagCache::TryRemoveDir(const fspath &path) {
+    assert(symutil::path_has_prefix(path, project_->home_path()));
+    assert(filesystem::is_directory(path));
+    auto relative_dir = filesystem::relative(path, project_->home_path());
+    auto it = rel_dir_module_map_.find(relative_dir);
+    if (it == rel_dir_module_map_.end()) {
+        LOG_WARN << "path module not found, project=" << project_->name()
+                  << " path=" << path;
+        return false;
+    }
+
+    rel_dir_module_map_.erase(it);
+
+    auto module_name = it->second;
+
+    LOG_STATUS << "project=" << project_->name() << " module=" << module_name
+               << " remove dir " << path;
+
+    if (relative_dir.string() != module_name) {
+        return true;
+    }
+
+    for (auto lit = rel_dir_module_map_.begin(); lit != rel_dir_module_map_.end(); ) {
+        if (lit->second == module_name) {
+            auto tmp_it = lit++;
+            rel_dir_module_map_.erase(tmp_it);
+        } else {
+            ++lit;
+        }
+    }
+
+    module_flags_.erase(module_name);
+    return true;
 }
 
 } /* symdb  */

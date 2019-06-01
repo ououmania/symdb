@@ -81,7 +81,8 @@ private:
 ProjectFileWatcher::ProjectFileWatcher(const fspath &abs_path)
     : abs_path_ { abs_path },
       fd_ { -1 } {
-    int mask = (IN_CREATE | IN_CLOSE_WRITE | IN_DELETE);
+    int mask = (IN_CREATE | IN_MODIFY | IN_CLOSE_WRITE | IN_DELETE |
+                IN_DELETE_SELF	| IN_MOVED_TO);
     fd_ = inotify_add_watch(ServerInst.inotify_fd(), abs_path.c_str(), mask);
     if (fd_ < 0) {
         THROW_AT_FILE_LINE("inotify_add_watch error: %s", strerror(errno));
@@ -392,11 +393,12 @@ void Project::ClangParseFile(SmartCXIndex cx_index,
     LOG_DEBUG << "start, file=" << abs_path;
 
     try {
-        TranslationUnitPtr unit = std::make_shared<TranslationUnit>(
+        TranslationUnitPtr clang_unit = std::make_shared<TranslationUnit>(
             abs_path.string(), *compile_flags, cx_index.get());
-        unit->CollectSymbols();
+        clang_unit->CollectSymbols();
         ServerInst.PostToMain(std::bind(&Project::WriteCompiledFile,
-            shared_from_this(), relative_path, abs_path, file_md5, unit));
+            shared_from_this(), clang_unit, relative_path,
+            CompiledFileInfo { file_md5, last_mtime }));
     } catch (const std::exception &e) {
         LOG_ERROR << "exception: " << e.what() << ", project=" << name_
                   << ", file=" << relative_path;
@@ -405,10 +407,9 @@ void Project::ClangParseFile(SmartCXIndex cx_index,
     LOG_DEBUG << "end, file=" << abs_path;
 }
 
-void Project::WriteCompiledFile(const fspath &relative_path,
-                                const fspath &abs_path,
-                                const std::string &md5,
-                                TranslationUnitPtr tu) {
+void Project::WriteCompiledFile(TranslationUnitPtr tu,
+                                fspath relative_path,
+                                CompiledFileInfo info) {
     const auto &new_symbols = tu->defined_symbols();
     if (new_symbols.empty()) {
         LOG_ERROR << "empty symbols, project=" << name_ << " file=" << relative_path;
@@ -460,11 +461,9 @@ void Project::WriteCompiledFile(const fspath &relative_path,
         put_symbol(kv.first, new_loc);
     }
 
-    auto last_mtime = symdb::last_wtime(abs_path);
-
     DB_FileBasicInfo file_table;
-    file_table.set_last_mtime(last_mtime);
-    file_table.set_content_md5(md5);
+    file_table.set_last_mtime(info.last_mtime);
+    file_table.set_content_md5(info.md5);
 
     batch.PutFile(relative_path, file_table);
 
@@ -703,8 +702,7 @@ std::string Project::GetModuleName(const fspath &path) const {
     return flag_cache_.GetModuleName(path);
 }
 
-void Project::HandleFileCreate(int wd, const std::string &path)
-{
+void Project::HandleEntryCreate(int wd, bool is_dir, const std::string &path) {
     auto it = watchers_.find(wd);
     assert (it != watchers_.end());
     assert (path.front() != '/');
@@ -713,6 +711,13 @@ void Project::HandleFileCreate(int wd, const std::string &path)
     fspath fs_path = it->second->abs_path() / path;
 
     LOG_DEBUG << "project=" << name_ << " wd=" << wd << " path=" << fs_path;
+
+    if (is_dir) {
+        auto module_name = flag_cache_.GetModuleName(fs_path.parent_path());
+        assert(!module_name.empty());
+        flag_cache_.AddDirToModule(fs_path, module_name);
+        return;
+    }
 
     if (!fs_path.has_extension()) {
         return;
@@ -725,8 +730,7 @@ void Project::HandleFileCreate(int wd, const std::string &path)
     }
 }
 
-void Project::HandleFileModified(int wd, const std::string &path)
-{
+void Project::HandleFileModified(int wd, const std::string &path) {
     auto it = watchers_.find(wd);
     assert (it != watchers_.end());
     assert (path.front() != '/');
@@ -750,8 +754,7 @@ void Project::HandleFileModified(int wd, const std::string &path)
     }
 }
 
-void Project::HandleFileDeleted(int wd, const std::string &path)
-{
+void Project::HandleEntryDeleted(int wd, bool is_dir, const std::string &path) {
     auto it = watchers_.find(wd);
     assert (it != watchers_.end());
 
@@ -763,7 +766,43 @@ void Project::HandleFileDeleted(int wd, const std::string &path)
         return;
     }
 
-    DeleteUnexistFile(fs_path);
+    if (!is_dir) {
+        DeleteUnexistFile(fs_path);
+        return;
+    }
+
+    if (!flag_cache_.TryRemoveDir(fs_path)) {
+        return;
+    }
+
+    LOG_WARN << "delete-self is not handled, project=" << name_
+             << " deleted_path=" << fs_path;
+    for (auto wit = watchers_.begin(); wit != watchers_.end(); ) {
+        if (symutil::path_has_prefix(wit->second->abs_path(), fs_path)) {
+            auto tmp_it = wit++;
+            watchers_.erase(tmp_it);
+        } else {
+            ++wit;
+        }
+    }
+}
+
+void Project::HandleWatchedDirDeleted(int wd, const std::string &path) {
+    auto it = watchers_.find(wd);
+    assert (it != watchers_.end());
+    assert (path.front() != '/');
+
+    const auto &fs_path = it->second->abs_path();
+    LOG_DEBUG << "project=" << name_ << " wd=" << wd << " path=" << fs_path;
+
+    // inotify emits file-delete event before the directory is deleted. So
+    // we know the files under this directory is alreday removed from both
+    // abs_src_paths_ and the database.
+    if (!flag_cache_.TryRemoveDir(fs_path)) {
+        LOG_ERROR << "delete from flag cache failed, project=" << name_
+                  << " path=" <<  fs_path;
+    }
+    watchers_.erase(it);
 }
 
 void Project::StartForceSyncTimer() {
