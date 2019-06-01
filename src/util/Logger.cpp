@@ -1,21 +1,17 @@
 #include "Logger.h"
-#include <mutex>
 #include <string>
-#include <iostream>
 #include <fstream>
 #include <boost/filesystem.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/log/trivial.hpp>
-#include <boost/core/null_deleter.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/utility/setup/console.hpp>
 #include <boost/log/common.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/attributes.hpp>
 #include <boost/log/sinks/sync_frontend.hpp>
 #include <boost/log/sinks/text_ostream_backend.hpp>
-#include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/support/date_time.hpp>
-#include <boost/log/sinks/frontend_requirements.hpp>
 
 namespace logging = boost::log;
 namespace attrs = boost::log::attributes;
@@ -75,17 +71,11 @@ void BoostLogger::Init(LogLevel level, const std::string &log_file)
     core->add_global_attribute("TimeStamp", attrs::local_clock());
     core->add_global_attribute("ThreadID", attrs::current_thread_id());
 
-    auto backend = boost::make_shared< sinks::text_ostream_backend >();
+    auto console_sink = boost::log::add_console_log<char>();
+    console_sink->set_filter(severity >= LogLevel::STATUS);
+    console_sink->locked_backend()->auto_flush(true);
 
-    backend->add_stream(
-        boost::shared_ptr< std::ostream >(&std::clog, boost::null_deleter()));
-
-    // thread-safe
-    typedef sinks::synchronous_sink< sinks::text_ostream_backend > text_sink;
-    boost::shared_ptr<text_sink> console(new text_sink(backend));
-    console->set_filter(severity >= LogLevel::STATUS);
-    console->locked_backend()->auto_flush(true);
-    core->add_sink(console);
+    using text_sink = sinks::synchronous_sink< sinks::text_ostream_backend >;
 
     auto stream = boost::make_shared<std::ofstream>(log_file, std::ios::app);
     auto sink = boost::make_shared<text_sink>();
