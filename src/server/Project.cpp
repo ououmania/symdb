@@ -412,8 +412,7 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu,
                                 CompiledFileInfo info) {
     const auto &new_symbols = tu->defined_symbols();
     if (new_symbols.empty()) {
-        LOG_ERROR << "empty symbols, project=" << name_ << " file=" << relative_path;
-        return;
+        LOG_WARN << "empty symbols, project=" << name_ << " file=" << relative_path;
     }
 
     SymbolMap old_symbols;
