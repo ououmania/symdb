@@ -362,13 +362,20 @@ void Project::ClangParseFile(SmartCXIndex cx_index,
                              StringVecPtr compile_flags) {
     assert(!ServerInst.IsInMainThread());
 
+    int64_t last_mtime = 0;
+    try {
+        last_mtime = symdb::last_wtime(abs_path);
+    } catch (const std::exception &e) {
+        LOG_ERROR << "exception=" << e.what() << ", project=" << name_
+                  << ", path=" << abs_path;
+        return;
+    }
+
     fspath relative_path = filesystem::relative(abs_path, home_path);
 
     auto file_info_key = MakeFileInfoKey(relative_path);
     DB_FileBasicInfo file_info;
     (void) LoadKeyPBValue(file_info_key, file_info);
-
-    auto last_mtime = symdb::last_wtime(abs_path);
 
     LOG_DEBUG << "project=" << name_ << ", path=" << abs_path
               << " saved_mtime=" << file_info.last_mtime() << ", last_mtime="
