@@ -339,7 +339,6 @@ void CompilerFlagCache::AddDirToModule(const fspath &path,
 
 bool CompilerFlagCache::TryRemoveDir(const fspath &path) {
     assert(symutil::path_has_prefix(path, project_->home_path()));
-    assert(filesystem::is_directory(path));
     auto relative_dir = filesystem::relative(path, project_->home_path());
     auto it = rel_dir_module_map_.find(relative_dir);
     if (it == rel_dir_module_map_.end()) {
