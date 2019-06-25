@@ -444,6 +444,8 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu,
     for (const auto &kv : old_symbols) {
         auto it = new_symbols.find(kv.first);
         if (it == new_symbols.end()) {
+            LOG_INFO << "project=" << name_ << " file=" << relative_path
+                     << " deleted_symbol=" << kv.first;
             auto symkey = MakeSymbolKey(kv.first);
             batch.Delete(symkey);
             is_symbol_changed = true;
