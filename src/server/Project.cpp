@@ -418,9 +418,9 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu,
                                 fspath relative_path,
                                 CompiledFileInfo info) {
     const auto &new_symbols = tu->defined_symbols();
-    if (new_symbols.empty()) {
-        LOG_WARN << "empty symbols, project=" << name_ << " file=" << relative_path;
-    }
+
+    LOG_INFO << "project=" << name_ << " file=" << relative_path << " symbols="
+             << new_symbols.size();
 
     SymbolMap old_symbols;
     (void) LoadFileSymbolInfo(relative_path, old_symbols);
@@ -603,6 +603,10 @@ Location Project::QuerySymbolDefinition(const std::string &symbol,
     Location location = GetSymbolLocation(db_info, abs_path);
     if (location.IsValid()) {
         return location;
+    }
+
+    if (db_info.locations().empty()) {
+        return Location {};
     }
 
     return Location { db_info.locations(0) };
