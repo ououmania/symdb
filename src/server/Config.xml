@@ -3,14 +3,9 @@
     <DataDir>${HOME}/.symdb/data</DataDir>
     <LogDir>${HOME}/.symdb/log</LogDir>
 
-    <!-- If not set, get from "g++ -E -x c++ - -v < /dev/null 2>&1" -->
+    <!-- Default: get from "g++ -E -x c++ - -v < /dev/null 2>&1" -->
+    <!-- Set this with caution if gcc version changes -->
     <SystemInclude>
-        <Directory>/usr/local/include/</Directory>
-        <Directory>/usr/include/c++/8.3.0</Directory>
-        <Directory>/usr/include/c++/8.3.0/x86_64-pc-linux-gnu</Directory>
-        <Directory>/usr/include/</Directory>
-        <Directory>/usr/lib/gcc/x86_64-pc-linux-gnu/8.3.0/include-fixed</Directory>
-        <Directory>/usr/lib/gcc/x86_64-pc-linux-gnu/8.3.0/include/</Directory>
     </SystemInclude>
 
     <GlobalExcluded>

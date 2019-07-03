@@ -185,21 +185,29 @@ void Config::InitDefaultIncDirs(const pugi::xml_node &root)
             THROW_AT_FILE_LINE("popen error: %s", strerror(errno));
         }
 
-        const char *unwanted = " \r\t\n";
+        const char *unwanted = " \t";
 
         std::vector<std::string> default_inc_dirs;
         bool is_started = false;
         char line[4096];
         while (fgets(line, 4096, stream) != nullptr) {
-            char *start = line + strspn(line, unwanted);
-            char *end = start + strcspn(start, unwanted);
+            char *start = line + strspn(line, " \t");
+            char *end = start + strlen(start);
+            if (*(end - 1) == '\n') {
+                --end;
+            }
+
             std::string str_line { start, end };
             if (is_started && str_line.find(kSysIncSearchEnd) != std::string::npos) {
                 break;
             } else if (is_started) {
-                LOG_DEBUG << "Add default inc dir: " << str_line;
-                default_inc_dirs_.push_back("-isystem");
-                default_inc_dirs_.push_back(str_line);
+                if (str_line.front() != '/') {
+                    LOG_ERROR << "line is not a path: " << str_line;
+                } else {
+                    LOG_DEBUG << "Add default inc dir: " << str_line;
+                    default_inc_dirs_.push_back("-isystem");
+                    default_inc_dirs_.push_back(str_line);
+                }
             } else if (strstr(line, kSysIncSearchBegin.c_str()) != nullptr) {
                 is_started = true;
             }
