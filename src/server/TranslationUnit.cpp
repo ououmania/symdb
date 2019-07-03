@@ -35,7 +35,7 @@ TranslationUnit::TranslationUnit(
 
     filename_ = filename;
 
-    // CheckClangDiagnostic();
+    CheckClangDiagnostic();
 }
 
 TranslationUnit::~TranslationUnit() {
@@ -44,11 +44,12 @@ TranslationUnit::~TranslationUnit() {
 
 void TranslationUnit::CheckClangDiagnostic() {
     unsigned num = clang_getNumDiagnostics(translation_unit_);
-    if (num != 0) {
-        LOG_ERROR << "file=" << filename_ << " nr_diag=" << num;
+    if (num == 0) {
+        return;
     }
 
-    for (unsigned i = 0; i < num; i++) {
+    LOG_ERROR << "file=" << filename_ << " nr_diag=" << num;
+    for (unsigned i = 0; i < std::min(num, 3U); i++) {
         CXDiagnostic diag = clang_getDiagnostic(translation_unit_, i);
         if (!diag) {
             continue;
@@ -164,7 +165,6 @@ bool TranslationUnit::IsWantedCursor(CXCursor cursor)
     default:
         return false;
     }
-
 }
 
 } /*  symdb */
