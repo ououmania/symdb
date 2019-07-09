@@ -19,33 +19,31 @@
 
 namespace symdb {
 
-std::string CXStringToString( CXString text ) {
+std::string CXStringToString(CXString text) {
   std::string final_string;
 
-  if ( !text.data ) {
+  if (!text.data) {
     return final_string;
   }
 
-  final_string = std::string( clang_getCString( text ) );
-  clang_disposeString( text );
+  final_string = std::string(clang_getCString(text));
+  clang_disposeString(text);
   return final_string;
 }
 
-bool CursorIsValid( CXCursor cursor ) {
-  return !clang_Cursor_isNull( cursor ) &&
-         !clang_isInvalid( clang_getCursorKind( cursor ) );
+bool CursorIsValid(CXCursor cursor) {
+  return !clang_Cursor_isNull(cursor) &&
+         !clang_isInvalid(clang_getCursorKind(cursor));
 }
 
-std::string CXFileToFilepath( CXFile file ) {
-  return CXStringToString( clang_getFileName( file ) );
+std::string CXFileToFilepath(CXFile file) {
+  return CXStringToString(clang_getFileName(file));
 }
 
-std::string ClangVersion() {
-  return CXStringToString( clang_getClangVersion() );
-}
+std::string ClangVersion() { return CXStringToString(clang_getClangVersion()); }
 
-const char *CXErrorCodeToString( CXErrorCode code ) {
-  switch ( code ) {
+const char *CXErrorCodeToString(CXErrorCode code) {
+  switch (code) {
     case CXError_Success:
       return "No error encountered while parsing the translation unit.";
     case CXError_Failure:
@@ -61,12 +59,10 @@ const char *CXErrorCodeToString( CXErrorCode code ) {
   return "Unknown error while parsing the translation unit.";
 }
 
-ClangParseError::ClangParseError( const char *what_arg )
-  : std::runtime_error( what_arg ) {
-};
+ClangParseError::ClangParseError(const char *what_arg)
+    : std::runtime_error(what_arg){};
 
-ClangParseError::ClangParseError( CXErrorCode code )
-  : ClangParseError( CXErrorCodeToString( code ) ) {
-};
+ClangParseError::ClangParseError(CXErrorCode code)
+    : ClangParseError(CXErrorCodeToString(code)){};
 
-} // namespace symdb
+}  // namespace symdb

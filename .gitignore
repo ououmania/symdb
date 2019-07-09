@@ -4,6 +4,7 @@
 !*/
 !**/CMakeLists.txt
 !proto/*.proto
+!src/.clang-format
 !src/**/*.cpp
 !src/**/*.h
 !src/**/*.hpp

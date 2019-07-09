@@ -1,80 +1,78 @@
-# pragma once
+#pragma once
 
+#include <boost/asio.hpp>
 #include <memory>
 #include <utility>
-#include <boost/asio.hpp>
 
 namespace symdb {
 
 using StringVec = std::vector<std::string>;
 
-class Command
-{
-    using CmdMap = std::map<std::string, Command>;
-    using CliHandler = std::function<void(StringVec&)>;
+class Command {
+  using CmdMap = std::map<std::string, Command>;
+  using CliHandler = std::function<void(StringVec&)>;
 
 public:
-    Command& SetHandler(CliHandler handler) {
-        handler_ = handler;
-        return *this;
-    }
+  Command& SetHandler(CliHandler handler) {
+    handler_ = handler;
+    return *this;
+  }
 
-    Command& operator[](const std::string& name);
+  Command& operator[](const std::string& name);
 
-    void Process(const std::string& line);
+  void Process(const std::string& line);
 
-    CmdMap& children() { return children_; }
-    const std::string& name() { return name_; }
-
-private:
-    static std::string GetCmdKey(const std::string &name);
+  CmdMap& children() { return children_; }
+  const std::string& name() { return name_; }
 
 private:
-    CmdMap children_;
-    std::string name_;
-    CliHandler handler_;
+  static std::string GetCmdKey(const std::string& name);
+
+private:
+  CmdMap children_;
+  std::string name_;
+  CliHandler handler_;
 };
 
-class SymShell
-{
+class SymShell {
 public:
-    void Init(boost::asio::io_service &io_context, const std::string &history_file);
+  void Init(boost::asio::io_service& io_context,
+            const std::string& history_file);
 
-    void WaitInput();
+  void WaitInput();
 
-    void ProcessCommad(const char *cmd);
+  void ProcessCommad(const char* cmd);
 
-    static SymShell& Instance() {
-        static SymShell symshell;
-        return symshell;
-    }
-
-private:
-    void HandleNewInput(boost::system::error_code ec);
-    void HandleNewSignal(boost::system::error_code ec);
-
-    static void ReadLineHandler(char *line);
-    static char** ReadlineCompletion(const char*, int, int);
-    static char* ReadlineCompletionGenerator(const char*, int);
+  static SymShell& Instance() {
+    static SymShell symshell;
+    return symshell;
+  }
 
 private:
-    void SetupSignal(boost::asio::io_service &io_context);
-    void SetupReadline(boost::asio::io_service &io_context);
+  void HandleNewInput(boost::system::error_code ec);
+  void HandleNewSignal(boost::system::error_code ec);
+
+  static void ReadLineHandler(char* line);
+  static char** ReadlineCompletion(const char*, int, int);
+  static char* ReadlineCompletionGenerator(const char*, int);
 
 private:
-    SymShell() = default;
-    SymShell(const SymShell &) = delete;
+  void SetupSignal(boost::asio::io_service& io_context);
+  void SetupReadline(boost::asio::io_service& io_context);
 
-    using AsioStream = boost::asio::posix::stream_descriptor;
+private:
+  SymShell() = default;
+  SymShell(const SymShell&) = delete;
 
-    Command root_cmd_;
-    std::unique_ptr<AsioStream> rl_stream_;
-    std::unique_ptr<AsioStream> signal_stream_;
-    std::string history_file_;
-    StringVec completion_cmds_;
-    boost::asio::io_service *io_service_;
-    bool is_running_;
+  using AsioStream = boost::asio::posix::stream_descriptor;
+
+  Command root_cmd_;
+  std::unique_ptr<AsioStream> rl_stream_;
+  std::unique_ptr<AsioStream> signal_stream_;
+  std::string history_file_;
+  StringVec completion_cmds_;
+  boost::asio::io_service* io_service_;
+  bool is_running_;
 };
 
-} // symdb
-
+}  // namespace symdb

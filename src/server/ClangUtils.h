@@ -18,45 +18,43 @@
 #ifndef CLANGUTILS_H_9MVHQLJS
 #define CLANGUTILS_H_9MVHQLJS
 
+#include <clang-c/Index.h>
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <clang-c/Index.h>
 
 namespace symdb {
 
 /**
  * Return a std::string from the supplied CXString.
  *
- * Takes ownership of, and destroys, the supplied CXString which must not be used
- * subsequently.
+ * Takes ownership of, and destroys, the supplied CXString which must not be
+ * used subsequently.
  */
-std::string CXStringToString( CXString text );
+std::string CXStringToString(CXString text);
 
-bool CursorIsValid( CXCursor cursor );
+bool CursorIsValid(CXCursor cursor);
 
-std::string CXFileToFilepath( CXFile file );
+std::string CXFileToFilepath(CXFile file);
 
 std::string ClangVersion();
 
-const char *CXErrorCodeToString( CXErrorCode code );
+const char* CXErrorCodeToString(CXErrorCode code);
 
 /**
  * Thrown when libclang fails to parse (or reparse) the translation unit.
  */
 struct ClangParseError : std::runtime_error {
-  ClangParseError( const char *what_arg );
-  ClangParseError( CXErrorCode code );
+  ClangParseError(const char* what_arg);
+  ClangParseError(CXErrorCode code);
 };
 
-inline std::ostream& operator<<(std::ostream& stream, const CXString& str)
-{
-    stream << clang_getCString(str);
-    clang_disposeString(str);
-    return stream;
+inline std::ostream& operator<<(std::ostream& stream, const CXString& str) {
+  stream << clang_getCString(str);
+  clang_disposeString(str);
+  return stream;
 }
 
-} // namespace symdb
+}  // namespace symdb
 
 #endif /* end of include guard: CLANGUTILS_H_9MVHQLJS */
-

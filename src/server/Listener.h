@@ -5,19 +5,18 @@
 
 namespace symdb {
 
-class Listener
-{
+class Listener {
 public:
-    Listener(boost::asio::io_context& io_context, const std::string& file);
+  Listener(boost::asio::io_context& io_context, const std::string& file);
 
 private:
-    void do_accept();
+  void do_accept();
 
 private:
-    boost::asio::local::stream_protocol::acceptor acceptor_;
-    boost::asio::local::stream_protocol::socket socket_;
+  boost::asio::local::stream_protocol::acceptor acceptor_;
+  boost::asio::local::stream_protocol::socket socket_;
 };
 
-} // symdb
+}  // namespace symdb
 
 #endif /* end of include guard: LISTENER_H_HDGFEQHT */

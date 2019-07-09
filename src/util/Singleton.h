@@ -1,19 +1,16 @@
-# pragma once
+#pragma once
 
-namespace symutil
-{
+namespace symutil {
 
 template <typename T>
-class Singleton
-{
+class Singleton {
 public:
-    static T& Instance()
-    {
-        static T obj;
-        return obj;
-    }
+  static T& Instance() {
+    static T obj;
+    return obj;
+  }
 
 private:
 };
 
-} /* symutil */
+}  // namespace symutil
