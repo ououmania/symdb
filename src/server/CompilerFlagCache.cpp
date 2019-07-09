@@ -20,22 +20,24 @@ std::regex CPP_COMPILER_REGEX{R"--(\+\+(-\d+(\.\d+){0,2})?$)--"};
 
 using CompilerFlagArgPair = std::pair<std::string, int>;
 
+// clang-format off
 // An easy way is only caring about the '-I', '-D', '-W' flags. Otherwise, we
 // have to exclude many other flags except those listed below.
 std::initializer_list<CompilerFlagArgPair> kCompilerFlagsToSkip = {
-    {"-c", 0},
-    {"-MD", 0},
-    {"-MMD", 0},
-    {"-MP", 0},
-    {"-rdynamic", 0},
-    {"--fcolor-diagnostics", 0},
-    {"-Wno-unused-but-set-variable", 0},  // clang doesn't recognize this
-    {"-MF", 1},
-    {"-MQ", 1},
-    {"-MT", 1},
-    {"-o", 1},
-    {"--serialize-diagnostics", 1},
+    { "-c"                          , 0 },
+    { "-MD"                         , 0 },
+    { "-MMD"                        , 0 },
+    { "-MP"                         , 0 },
+    { "-rdynamic"                   , 0 },
+    { "--fcolor-diagnostics"        , 0 },
+    { "-Wno-unused-but-set-variable", 0 }  ,   // clang doesn't recognize this
+    { "-MF"                         , 1 },
+    { "-MQ"                         , 1 },
+    { "-MT"                         , 1 },
+    { "-o"                          , 1 },
+    { "--serialize-diagnostics"     , 1 },
 };
+// clang-format on
 
 void PruneCompilerFlags(std::list<std::string> &flags,
                         const std::string &filename) {
