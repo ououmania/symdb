@@ -345,9 +345,9 @@ bool CompilerFlagCache::TryRemoveDir(const fspath &path) {
     return false;
   }
 
-  rel_dir_module_map_.erase(it);
-
   auto module_name = it->second;
+
+  rel_dir_module_map_.erase(it);
 
   LOG_STATUS << "project=" << project_->name() << " module=" << module_name
              << " remove dir " << path;

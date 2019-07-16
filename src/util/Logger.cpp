@@ -12,6 +12,7 @@
 #include <boost/shared_ptr.hpp>
 #include <fstream>
 #include <string>
+#include <time.h>
 
 namespace logging = boost::log;
 namespace attrs = boost::log::attributes;
@@ -42,7 +43,9 @@ void my_formatter(logging::record_view const& rec,
   auto date_time =
       logging::extract<attrs::local_clock::value_type>("TimeStamp", rec);
   auto tm = boost::posix_time::to_tm(date_time.get());
-  strm << '[' << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << ']';
+  char time_buffer[512];
+  (void) strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", &tm);
+  strm << '[' << time_buffer << ']';
   strm << '[' << logging::extract<LogLevel>("Severity", rec) << ']';
   auto tid =
       logging::extract<attrs::current_thread_id::value_type>("ThreadID", rec)

@@ -5,8 +5,12 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
-#include <regex>
 #include <string>
+#if __GNU_C__ >= 5
+#include <regex>
+#else
+#include <boost/regex.hpp>
+#endif
 
 namespace symutil {
 
@@ -64,6 +68,8 @@ inline void replace_string(std::string &dest, const std::string &from,
   }
 }
 
+// wordexp requires glibc and expands too much.
+#if __GNU_C__ >= 5
 inline std::string expand_env(std::string text) {
   static const std::regex env_re{R"--(\$\{([^}]+)\})--"};
   std::smatch match;
@@ -74,5 +80,16 @@ inline std::string expand_env(std::string text) {
   }
   return text;
 }
+#else
+inline std::string matchToEnv(const boost::smatch& match) {
+  const char *s = getenv(match[1].str().c_str());
+  return s == NULL ? std::string("") : std::string(s);
+}
+
+inline std::string expand_env(std::string text) {
+  static const boost::regex env_re { "\\$\\{([^}]+)\\}" };
+  return boost::regex_replace(text, env_re, matchToEnv);
+}
+#endif
 
 }  // namespace symutil
