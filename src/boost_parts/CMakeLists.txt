@@ -1,8 +1,9 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 
 set(BOOST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
+set(LOCAL_BOOST_LIBRARIES)
 
-function(add_boost_lib target src_dir)
+macro(add_boost_lib target src_dir)
     file(GLOB_RECURSE SRC_FILES RELATIVE
                       ${CMAKE_CURRENT_SOURCE_DIR}
                       ${src_dir}/*.cpp)
@@ -24,13 +25,16 @@ function(add_boost_lib target src_dir)
     add_library( ${target} STATIC ${SRC_FILES} )
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${src_dir})
 
-    set(BOOST_LIBRARIES ${BOOST_LIBRARIES} ${target} PARENT_SCOPE )
-endfunction(add_boost_lib)
+    list(APPEND LOCAL_BOOST_LIBRARIES ${target})
+endmacro(add_boost_lib)
 
 add_boost_lib(boost_filesystem ${CMAKE_CURRENT_SOURCE_DIR}/libs/filesystem)
 add_boost_lib(boost_log ${CMAKE_CURRENT_SOURCE_DIR}/libs/log)
 add_boost_lib(boost_system ${CMAKE_CURRENT_SOURCE_DIR}/libs/system)
 add_boost_lib(boost_thread ${CMAKE_CURRENT_SOURCE_DIR}/libs/thread)
+add_boost_lib(boost_regex ${CMAKE_CURRENT_SOURCE_DIR}/libs/regex)
+
+set(BOOST_LIBRARIES ${LOCAL_BOOST_LIBRARIES} PARENT_SCOPE)
 
 target_compile_options(boost_log PRIVATE -march=native -msse3 -mavx2)
 target_compile_definitions(boost_log PRIVATE _XOPEN_SOURCE=600)
