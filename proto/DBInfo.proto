@@ -3,6 +3,28 @@ package symdb;
 
 import "General.proto";
 
+message PB_LineColumn {
+    uint32 line = 1;
+    uint32 column = 2;
+}
+
+// A symbol may be referred by a file multiple times.
+message DB_PathLocations {
+    string path = 1;
+    repeated PB_LineColumn locations = 2;
+}
+
+message DB_SymbolReferenceItem {
+    string module_name = 1;
+    repeated DB_PathLocations path_locs = 2;
+}
+
+message DB_FileReferredSymbol {
+    string module_name = 1; // the module where the symbol is defined
+    string symbol_name = 2;
+    repeated PB_LineColumn locations = 3;
+}
+
 message DB_ProjectInfo {
     repeated string rel_paths = 1;
 }
@@ -14,10 +36,19 @@ message DB_FileBasicInfo {
 }
 
 message DB_FileSymbolInfo {
-    repeated string symbols = 3;
+    repeated string symbols = 1;
 }
 
-message DB_SymbolInfo {
+message DB_SymbolDefinitionInfo {
     repeated PB_Location locations = 1;
+}
+
+message DB_FileReferenceInfo {
+    repeated DB_FileReferredSymbol symbols = 1;
+}
+
+// Where a symbol is referred.
+message DB_SymbolReferenceInfo {
+    repeated DB_SymbolReferenceItem items = 1;
 }
 
