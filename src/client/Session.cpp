@@ -83,10 +83,12 @@ void Session::get_symbol_definition(const std::string &proj_name,
 }
 
 void Session::get_symbol_references(const std::string &proj_name,
-                                    const std::string &symbol) {
+                                    const std::string &symbol,
+                                    const std::string &hint_path) {
   GetSymbolReferencesReq req;
   req.set_proj_name(proj_name);
   req.set_symbol(symbol);
+  req.set_path(hint_path);
 
   GetSymbolReferencesRsp rsp;
   send_and_recv(MessageID::GET_SYMBOL_REFERENCES_REQ, req, rsp);
@@ -100,6 +102,16 @@ void Session::list_file_symbols(const std::string &proj_name,
 
   ListFileSymbolsRsp rsp;
   send_and_recv(MessageID::LIST_FILE_SYMBOLS_REQ, req, rsp);
+}
+
+void Session::list_file_references(const std::string &proj_name,
+                                   const std::string &rel_path) {
+  ListFileReferencesReq req;
+  req.set_proj_name(proj_name);
+  req.set_relative_path(rel_path);
+
+  ListFileReferencesRsp rsp;
+  send_and_recv(MessageID::LIST_FILE_REFERENCES_REQ, req, rsp);
 }
 
 bool Session::send(int msg_id, const google::protobuf::Message &body) {

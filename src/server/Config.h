@@ -40,6 +40,9 @@ public:
   void SpecializeGlobalPattern(const std::string &pattern);
   bool IsFileExcluded(const fspath &path) const;
 
+  // Try home_path_/{build,_build}
+  void UseDefaultBuildPath();
+
   bool is_enable_file_watch() const { return is_enable_file_watch_; }
   const std::string &name() const { return name_; }
   const fspath &home_path() const { return home_path_; }

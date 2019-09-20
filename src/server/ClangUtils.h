@@ -55,6 +55,21 @@ inline std::ostream& operator<<(std::ostream& stream, const CXString& str) {
   return stream;
 }
 
+inline std::string GetCursorNamespace(CXCursor cursor) {
+  std::string ns;
+  while (!clang_Cursor_isNull(cursor)) {
+    CXCursorKind kind = clang_getCursorKind(cursor);
+    if (kind == CXCursor_TranslationUnit) {
+      break;
+    }
+    if (kind == CXCursor_Namespace) {
+      ns = CXStringToString(clang_getCursorSpelling(cursor));
+    }
+    cursor = clang_getCursorSemanticParent(cursor);
+  }
+  return ns;
+}
+
 }  // namespace symdb
 
 #endif /* end of include guard: CLANGUTILS_H_9MVHQLJS */

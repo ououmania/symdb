@@ -141,6 +141,10 @@ void Session::handle_message(const uint8_t *buffer, size_t length) {
       list_file_symbols(body_buffer, body_length);
       break;
 
+    case MessageID::LIST_FILE_REFERENCES_REQ:
+      list_file_references(body_buffer, body_length);
+      break;
+
     default:
       LOG_ERROR << "unknown message " << head.msg_id();
       break;
@@ -257,7 +261,7 @@ void Session::get_symbol_definition(const uint8_t *buffer, size_t length) {
     Location location =
         project->QuerySymbolDefinition(msg.symbol(), msg.abs_path());
     if (location.IsValid()) {
-      location.Seriaize(*rsp->add_locations());
+      location.Serialize(*rsp->add_locations());
       LOG_DEBUG << "project=" << msg.proj_name() << ", symbol=" << msg.symbol()
                 << ", abs_path=" << msg.abs_path()
                 << ", path=" << location.filename();
@@ -270,7 +274,7 @@ void Session::get_symbol_definition(const uint8_t *buffer, size_t length) {
     auto locations = project->QuerySymbolDefinition(msg.symbol());
     rsp->mutable_locations()->Reserve(locations.size());
     for (const auto &loc : locations) {
-      loc.Seriaize(*rsp->add_locations());
+      loc.Serialize(*rsp->add_locations());
     }
   }
 }
@@ -279,6 +283,53 @@ void Session::get_symbol_references(const uint8_t *buffer, size_t length) {
   CHECK_PARSE_MESSAGE(GetSymbolReferencesReq, buffer, length);
 
   LOG_DEBUG << "project=" << msg.proj_name() << ", symbol=" << msg.symbol();
+
+  ResponseGuard<GetSymbolReferencesRsp> rsp(
+      this, MessageID::GET_SYMBOL_REFERENCES_RSP);
+
+  ProjectPtr project = ServerInst.GetProject(msg.proj_name());
+  if (!project) {
+    LOG_ERROR << kErrorProjectNotFound << ", project=" << msg.proj_name();
+    rsp->set_error(kErrorProjectNotFound);
+    return;
+  }
+
+  SymbolReferenceLocationMap sym_locs;
+  project->LoadSymbolReferenceInfo(msg.symbol(), sym_locs);
+
+  auto pack_locations = [&](const PathLocPairSetMap &path_locs) {
+    for (const auto &kvp : path_locs) {
+      for (const auto &loc : kvp.second) {
+        try {
+          fspath abs_path = project->home_path() / kvp.first;
+          if (filesystem::exists(abs_path)) {
+            auto *item = rsp->add_locations();
+            item->set_path(abs_path.string());
+            item->set_line(loc.first);
+            item->set_column(loc.second);
+          }
+        } catch (const std::exception &e) {
+          LOG_ERROR << "exception=" << e.what()
+                    << ", project=" << project->name()
+                    << ", home=" << project->home_path()
+                    << ", path=" << kvp.first;
+        }
+      }
+    }
+  };
+
+  if (!msg.path().empty()) {
+    auto module_name = project->GetModuleName(msg.path());
+    auto it = sym_locs.find(module_name);
+    if (it != sym_locs.end()) {
+      pack_locations(it->second);
+      return;
+    }
+  }
+
+  for (const auto &kvp : sym_locs) {
+    pack_locations(kvp.second);
+  }
 }
 
 void Session::list_file_symbols(const uint8_t *buffer, size_t length) {
@@ -295,8 +346,8 @@ void Session::list_file_symbols(const uint8_t *buffer, size_t length) {
     return;
   }
 
-  SymbolMap symbols;
-  if (!project->LoadFileSymbolInfo(msg.relative_path(), symbols)) {
+  SymbolDefinitionMap symbols;
+  if (!project->LoadFileDefinedSymbolInfo(msg.relative_path(), symbols)) {
     LOG_ERROR << kErrorFileNotFound << ", project=" << msg.proj_name();
     rsp->set_error(kErrorFileNotFound);
   } else if (!symbols.empty()) {
@@ -307,6 +358,39 @@ void Session::list_file_symbols(const uint8_t *buffer, size_t length) {
       pb_symbol->set_name(kv.first);
       pb_symbol->set_column(kv.second.column_number());
       pb_symbol->set_line(kv.second.line_number());
+    }
+  }
+}
+
+void Session::list_file_references(const uint8_t *buffer, size_t length) {
+  CHECK_PARSE_MESSAGE(ListFileReferencesReq, buffer, length);
+
+  LOG_DEBUG << "project=" << msg.proj_name()
+            << ", rel_path=" << msg.relative_path();
+
+  ResponseGuard<ListFileReferencesRsp> rsp(this,
+                                           MessageID::LIST_FILE_REFERENCES_RSP);
+  ProjectPtr project = ServerInst.GetProject(msg.proj_name());
+  if (!project) {
+    LOG_ERROR << kErrorProjectNotFound << ", project=" << msg.proj_name();
+    rsp->set_error(kErrorProjectNotFound);
+    return;
+  }
+
+  FileSymbolReferenceMap symbols;
+  if (!project->LoadFileReferredSymbolInfo(msg.relative_path(), symbols)) {
+    LOG_ERROR << kErrorFileNotFound << ", project=" << msg.proj_name();
+    rsp->set_error(kErrorFileNotFound);
+  } else if (!symbols.empty()) {
+    auto *pb_symbols = rsp->mutable_symbols();
+    pb_symbols->Reserve(symbols.size());
+    for (const auto &kv : symbols) {
+      auto *pb_symbol = pb_symbols->Add();
+      pb_symbol->set_name(kv.first.first);
+      for (const auto &lcp : kv.second) {
+        pb_symbol->set_line(lcp.first);
+        pb_symbol->set_column(lcp.second);
+      }
     }
   }
 }

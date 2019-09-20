@@ -30,12 +30,17 @@ public:
 
   void get_symbol_definition(const std::string &proj_name,
                              const std::string &symbol,
-                             const std::string &abs_path);
+                             const std::string &hint_path);
+
   void get_symbol_references(const std::string &proj_name,
-                             const std::string &symbol);
+                             const std::string &symbol,
+                             const std::string &hint_path);
 
   void list_file_symbols(const std::string &proj_name,
-                         const std::string &symbol);
+                         const std::string &path);
+
+  void list_file_references(const std::string &proj_name,
+                            const std::string &path);
 
 private:
   bool send(int msg_id, const google::protobuf::Message &body);

@@ -64,7 +64,7 @@ public:
 
   bool IsValid() const { return !filename_.empty(); }
 
-  void Seriaize(PB_Location &pb_loc) const {
+  void Serialize(PB_Location &pb_loc) const {
     pb_loc.set_path(filename_);
     pb_loc.set_column(column_number_);
     pb_loc.set_line(line_number_);

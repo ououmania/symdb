@@ -44,6 +44,7 @@ private:
   void get_symbol_definition(const uint8_t *buffer, size_t length);
   void get_symbol_references(const uint8_t *buffer, size_t length);
   void list_file_symbols(const uint8_t *buffer, size_t length);
+  void list_file_references(const uint8_t *buffer, size_t length);
 
 private:
   Socket socket_;

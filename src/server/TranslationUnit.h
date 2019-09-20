@@ -9,7 +9,11 @@
 
 namespace symdb {
 
-using SymbolMap = std::map<std::string, Location>;
+using LineColPair = std::pair<uint32_t, uint32_t>;
+using LineColPairSet = std::set<LineColPair>;
+using SymbolPathPair = std::pair<std::string, std::string>;
+using SymbolDefinitionMap = std::map<std::string, Location>;
+using SymbolReferenceMap = std::map<SymbolPathPair, LineColPairSet>;
 
 class TranslationUnit {
 public:
@@ -34,7 +38,8 @@ public:
     return GetSourceLocation(filename_, line, column);
   }
 
-  SymbolMap &defined_symbols() { return defined_symbols_; }
+  SymbolDefinitionMap& defined_symbols() { return defined_symbols_; }
+  SymbolReferenceMap& reference_symbols() { return referred_symbols_; }
 
 private:
   void CheckClangDiagnostic();
@@ -43,11 +48,16 @@ private:
   static CXChildVisitResult VisitCursor(CXCursor cursor, CXCursor parent,
                                         CXClientData client_data);
 
-  static bool IsWantedCursor(CXCursor cursor);
+  static bool IsWantedDefinition(CXCursor cursor);
+  static bool IsWantedReference(CXCursor cursor);
+  // The definition of the reference
+  static bool IsWantedReferenceDef(CXCursor cursor);
 
   CXTranslationUnit translation_unit_;
   std::string filename_;
-  SymbolMap defined_symbols_;
+  SymbolDefinitionMap defined_symbols_;
+  SymbolReferenceMap referred_symbols_;
+  std::set<LineColPair> macro_expansions_;
 };
 
 }  // namespace symdb

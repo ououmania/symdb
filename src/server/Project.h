@@ -18,8 +18,13 @@ namespace symdb {
 using SmartLevelDBPtr = std::unique_ptr<leveldb::DB>;
 using SmartCXIndex = RawPointerWrap<CXIndex>;
 using TranslationUnitPtr = std::shared_ptr<TranslationUnit>;
+using LineColPairSet = std::set<LineColPair>;
+using SymbolModulePair = std::pair<std::string, std::string>;
+using FileSymbolReferenceMap = std::map<SymbolModulePair, LineColPairSet>;
+using PathLocPairSetMap = std::map<fspath, LineColPairSet>;
+using SymbolReferenceLocationMap = std::map<std::string, PathLocPairSetMap>;
 
-class DB_SymbolInfo;
+class DB_SymbolDefinitionInfo;
 class BatchWriter;
 class ProjectConfig;
 
@@ -74,7 +79,14 @@ public:
   void HandleFileModified(int wd, const std::string &path);
   void HandleWatchedDirDeleted(int wd, const std::string &path);
 
-  bool LoadFileSymbolInfo(const fspath &path, SymbolMap &symbols) const;
+  bool LoadFileDefinedSymbolInfo(const fspath &path,
+                                 SymbolDefinitionMap &symbols) const;
+
+  bool LoadFileReferredSymbolInfo(const fspath &path,
+                                  FileSymbolReferenceMap &symbols) const;
+
+  bool LoadSymbolReferenceInfo(const std::string &symbol_name,
+                               SymbolReferenceLocationMap &loc_map) const;
 
   std::vector<Location> QuerySymbolDefinition(const std::string &symbol) const;
 
@@ -90,6 +102,8 @@ public:
   bool IsWatchFdInList(int file_wd) const;
 
   bool IsFileExcluded(const fspath &path) const;
+
+  std::string GetModuleName(const fspath &path) const;
 
   void SetConfig(std::shared_ptr<ProjectConfig> config) { config_ = config; }
 
@@ -108,9 +122,17 @@ private:
   void WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
                          CompiledFileInfo info);
 
+  void WriteFileDefinitions(TranslationUnitPtr tu, fspath relative_path,
+                            BatchWriter &writer);
+
+  void WriteFileReferences(TranslationUnitPtr tu, fspath relative_path,
+                           BatchWriter &writer);
+
   std::string MakeFileInfoKey(const fspath &file_path) const;
-  std::string MakeFileSymbolKey(const fspath &file_rel_path) const;
-  std::string MakeSymbolKey(const std::string &symbol_name) const;
+  std::string MakeFileSymbolDefineKey(const fspath &file_rel_path) const;
+  std::string MakeFileSymbolReferKey(const fspath &file_rel_path) const;
+  std::string MakeSymbolDefineKey(const std::string &symbol_name) const;
+  std::string MakeSymbolReferKey(const std::string &symbol_name) const;
 
   bool LoadKey(const std::string &key, std::string &value) const;
 
@@ -121,16 +143,17 @@ private:
 
   bool PutSingleKey(const std::string &key, const std::string &value);
 
-  bool GetSymbolDBInfo(const std::string &symbol, DB_SymbolInfo &st) const;
+  bool GetSymbolDefinitionInfo(const std::string &symbol,
+                               DB_SymbolDefinitionInfo &st) const;
 
-  std::string GetModuleName(const fspath &path) const;
-
-  Location GetSymbolLocation(const DB_SymbolInfo &st,
+  Location GetSymbolLocation(const DB_SymbolDefinitionInfo &st,
                              const fspath &rel_path) const;
 
-  void AddSymbolLocation(DB_SymbolInfo &st, const std::string &module_name,
+  void AddSymbolLocation(DB_SymbolDefinitionInfo &st,
+                         const std::string &module_name,
                          const Location &location);
-  bool RemoveSymbolLocation(DB_SymbolInfo &st, const std::string &module_name);
+  bool RemoveSymbolLocation(DB_SymbolDefinitionInfo &st,
+                            const std::string &module_name) const;
 
   void BuildFile(SmartCXIndex cx_index, const fspath &abs_path);
 
@@ -144,6 +167,11 @@ private:
   void SmartSync();
 
   void DeleteUnexistFile(const fspath &deleted_path);
+
+  void DeleteFileDefinedSymbolInfo(const fspath &path, BatchWriter &writer) const;
+
+  void DeleteFileReferredSymbolInfo(const fspath &path, BatchWriter &writer) const;
+
   void LoadCmakeCompilationInfo(const fspath &build_path);
 
   void LoadCmakeCompilationInfoFromClangDatabase(const fspath &build_path);
@@ -152,6 +180,8 @@ private:
 
   void AddFileWatch(const fspath &path);
   void RemoveFileWatch(const fspath &path);
+
+  void RestoreConfig();
 
 private:
   std::string name_;

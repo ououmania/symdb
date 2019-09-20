@@ -35,7 +35,7 @@ public:
 
   template <typename PBType>
   void PutSymbol(const std::string &symbol, const PBType &pb) {
-    batch_.Put(project_->MakeSymbolKey(symbol), pb.SerializeAsString());
+    batch_.Put(project_->MakeSymbolDefineKey(symbol), pb.SerializeAsString());
   }
 
   template <typename PBType>
@@ -112,6 +112,7 @@ ProjectPtr Project::CreateFromDatabase(const std::string &name) {
   if (!project->LoadProjectInfo()) {
     THROW_AT_FILE_LINE("project<%s> load failed", name.c_str());
   }
+  project->RestoreConfig();
 
   return project;
 }
@@ -129,6 +130,7 @@ ProjectPtr Project::CreateFromConfigFile(const std::string &name,
   ProjectPtr project = std::make_shared<Project>(name);
   project->InitializeLevelDB(true, true);
   project->ChangeHome(home);
+  project->RestoreConfig();
 
   return project;
 }
@@ -412,27 +414,39 @@ void Project::ClangParseFile(SmartCXIndex cx_index, fspath home_path,
 
 void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
                                 CompiledFileInfo info) {
+  BatchWriter writer{this};
+
+  DB_FileBasicInfo file_table;
+  file_table.set_last_mtime(info.last_mtime);
+  file_table.set_content_md5(info.md5);
+
+  writer.PutFile(relative_path, file_table);
+
+  WriteFileDefinitions(tu, relative_path, writer);
+  WriteFileReferences(tu, relative_path, writer);
+}
+
+void Project::WriteFileDefinitions(TranslationUnitPtr tu, fspath relative_path,
+                                   BatchWriter &writer) {
   const auto &new_symbols = tu->defined_symbols();
 
   LOG_INFO << "project=" << name_ << " file=" << relative_path
            << " symbols=" << new_symbols.size();
 
-  SymbolMap old_symbols;
-  (void)LoadFileSymbolInfo(relative_path, old_symbols);
-
-  BatchWriter batch{this};
+  SymbolDefinitionMap old_symbols;
+  (void)LoadFileDefinedSymbolInfo(relative_path, old_symbols);
 
   std::string module_name = GetModuleName(relative_path);
 
   auto put_symbol = [&](const std::string &symbol, const Location &loc) {
-    auto symkey = MakeSymbolKey(symbol);
+    auto symkey = MakeSymbolDefineKey(symbol);
 
-    DB_SymbolInfo st;
+    DB_SymbolDefinitionInfo st;
     (void)LoadKeyPBValue(symkey, st);
     AddSymbolLocation(st, module_name, loc);
 
     auto loc_str = st.SerializeAsString();
-    batch.Put(symkey, loc_str);
+    writer.Put(symkey, loc_str);
   };
 
   bool is_symbol_changed = false;
@@ -441,8 +455,8 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
     if (it == new_symbols.end()) {
       LOG_INFO << "project=" << name_ << " file=" << relative_path
                << " deleted_symbol=" << kv.first;
-      auto symkey = MakeSymbolKey(kv.first);
-      batch.Delete(symkey);
+      auto symkey = MakeSymbolDefineKey(kv.first);
+      writer.Delete(symkey);
       is_symbol_changed = true;
     } else {
       Location location = QuerySymbolDefinition(kv.first, relative_path);
@@ -465,14 +479,8 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
     put_symbol(kv.first, new_loc);
   }
 
-  DB_FileBasicInfo file_table;
-  file_table.set_last_mtime(info.last_mtime);
-  file_table.set_content_md5(info.md5);
-
-  batch.PutFile(relative_path, file_table);
-
   if (is_symbol_changed) {
-    auto file_symbol_key = MakeFileSymbolKey(relative_path.string());
+    auto file_symbol_key = MakeFileSymbolDefineKey(relative_path.string());
     DB_FileSymbolInfo file_symbol_info;
     file_symbol_info.mutable_symbols()->Reserve(new_symbols.size());
     for (const auto &kv : new_symbols) {
@@ -480,10 +488,119 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
     }
 
     if (new_symbols.empty()) {
-      batch.Delete(file_symbol_key);
+      writer.Delete(file_symbol_key);
     } else {
-      batch.Put(file_symbol_key, file_symbol_info.SerializeAsString());
+      writer.Put(file_symbol_key, file_symbol_info.SerializeAsString());
     }
+  }
+}
+
+void Project::WriteFileReferences(TranslationUnitPtr tu, fspath relative_path,
+                                  BatchWriter &writer) {
+  FileSymbolReferenceMap new_symbols;
+  int nr_referred = 0;
+  for (const auto &kvp : tu->reference_symbols()) {
+    const auto &symbol = kvp.first.first;
+    const auto &path = kvp.first.second;
+    std::string module_name = GetModuleName(path);
+    SymbolModulePair sym_mod{symbol, module_name};
+    auto &loc_set = new_symbols[sym_mod];
+    for (const auto &loc : kvp.second) {
+      loc_set.insert(LineColPair{loc.first, loc.second});
+      ++nr_referred;
+    }
+  }
+
+  LOG_INFO << "project=" << name_ << " file=" << relative_path
+           << " referred_symbols=" << nr_referred;
+
+  FileSymbolReferenceMap old_symbols;
+  (void)LoadFileReferredSymbolInfo(relative_path, old_symbols);
+
+  auto put_symbol_reference = [&](const std::string &symbol_name,
+                                  const SymbolReferenceLocationMap &sym_locs) {
+    auto symbol_key = MakeSymbolReferKey(symbol_name);
+    if (sym_locs.empty()) {
+      writer.Delete(symbol_key);
+      return;
+    }
+    DB_SymbolReferenceInfo db_info;
+    db_info.mutable_items()->Reserve(sym_locs.size());
+    for (const auto &kvp : sym_locs) {
+      auto *item = db_info.add_items();
+      item->set_module_name(kvp.first);
+      item->mutable_path_locs()->Reserve(kvp.second.size());
+      for (const auto &kvp2 : kvp.second) {
+        auto *path_loc = item->add_path_locs();
+        path_loc->set_path(kvp2.first.string());
+        path_loc->mutable_locations()->Reserve(kvp2.second.size());
+        for (const auto &loc : kvp2.second) {
+          auto *pb_loc = path_loc->add_locations();
+          pb_loc->set_line(loc.first);
+          pb_loc->set_column(loc.second);
+        }
+      }
+    }
+    writer.Put(symbol_key, db_info);
+  };
+
+  bool is_symbol_changed = false;
+  for (const auto &kv : old_symbols) {
+    auto it = new_symbols.find(kv.first);
+    if (it != new_symbols.end()) {
+      continue;
+    }
+
+    const auto &sym_name = kv.first.first;
+    const auto &mod_name = kv.first.second;
+
+    SymbolReferenceLocationMap sym_locs;
+    if (!LoadSymbolReferenceInfo(sym_name, sym_locs)) {
+      continue;
+    }
+
+    auto ref_it = sym_locs.find(mod_name);
+    if (ref_it == sym_locs.end()) {
+      continue;
+    }
+
+    is_symbol_changed = true;
+    ref_it->second.erase(relative_path);
+    if (ref_it->second.empty()) {
+      sym_locs.erase(ref_it);
+    }
+    put_symbol_reference(sym_name, sym_locs);
+  }
+
+  for (const auto &kv : new_symbols) {
+    const auto &sym_name = kv.first.first;
+    const auto &mod_name = kv.first.second;
+    auto it = old_symbols.find(kv.first);
+    if (it == old_symbols.end() || it->second != kv.second) {
+      SymbolReferenceLocationMap sym_locs;
+      (void)LoadSymbolReferenceInfo(sym_name, sym_locs);
+      sym_locs[mod_name][relative_path] = kv.second;
+      is_symbol_changed = true;
+      put_symbol_reference(sym_name, sym_locs);
+    }
+  }
+
+  if (is_symbol_changed) {
+    auto file_symbol_key = MakeFileSymbolReferKey(relative_path.string());
+    DB_FileReferenceInfo file_symbol_info;
+    file_symbol_info.mutable_symbols()->Reserve(new_symbols.size());
+    for (const auto &kv : new_symbols) {
+      auto item = file_symbol_info.add_symbols();
+      item->mutable_locations()->Reserve(kv.second.size());
+      item->set_symbol_name(kv.first.first);
+      item->set_module_name(kv.first.second);
+      for (const auto &loc : kv.second) {
+        auto *pb_loc = item->add_locations();
+        pb_loc->set_line(loc.first);
+        pb_loc->set_column(loc.second);
+      }
+    }
+    writer.Put(file_symbol_key, file_symbol_info);
   }
 }
 
@@ -533,9 +650,9 @@ bool Project::LoadProjectInfo() {
   return true;
 }
 
-bool Project::LoadFileSymbolInfo(const fspath &file_path,
-                                 SymbolMap &symbols) const {
-  std::string file_key = MakeFileSymbolKey(file_path);
+bool Project::LoadFileDefinedSymbolInfo(const fspath &file_path,
+                                        SymbolDefinitionMap &symbols) const {
+  std::string file_key = MakeFileSymbolDefineKey(file_path);
 
   DB_FileSymbolInfo db_info;
   if (!LoadKeyPBValue(file_key, db_info)) {
@@ -555,9 +672,53 @@ bool Project::LoadFileSymbolInfo(const fspath &file_path,
   return true;
 }
 
-bool Project::GetSymbolDBInfo(const std::string &symbol,
-                              DB_SymbolInfo &st) const {
-  std::string symbol_key = MakeSymbolKey(symbol);
+bool Project::LoadFileReferredSymbolInfo(
+    const fspath &file_path, FileSymbolReferenceMap &symbols) const {
+  std::string file_key = MakeFileSymbolReferKey(file_path);
+
+  DB_FileReferenceInfo db_info;
+  if (!LoadKeyPBValue(file_key, db_info)) {
+    return false;
+  }
+
+  for (const auto &symbol : db_info.symbols()) {
+    SymbolModulePair smp{symbol.symbol_name(), symbol.module_name()};
+    auto &lcs = symbols[smp];
+    for (const auto &item : symbol.locations()) {
+      LineColPair loc{item.line(), item.column()};
+      lcs.insert(loc);
+    }
+  }
+
+  return true;
+}
+
+bool Project::LoadSymbolReferenceInfo(
+    const std::string &symbol_name,
+    SymbolReferenceLocationMap &sym_locs) const {
+  auto symbol_key = MakeSymbolReferKey(symbol_name);
+
+  DB_SymbolReferenceInfo db_info;
+  if (!LoadKeyPBValue(symbol_key, db_info)) {
+    return false;
+  }
+
+  for (const auto &item : db_info.items()) {
+    auto &sym_refs = sym_locs[item.module_name()];
+    for (const auto &path_loc : item.path_locs()) {
+      auto &file_info = sym_refs[path_loc.path()];
+      for (const auto &loc : path_loc.locations()) {
+        file_info.insert(LineColPair{loc.line(), loc.column()});
+      }
+    }
+  }
+
+  return true;
+}
+
+bool Project::GetSymbolDefinitionInfo(const std::string &symbol,
+                                      DB_SymbolDefinitionInfo &st) const {
+  std::string symbol_key = MakeSymbolDefineKey(symbol);
 
   if (!LoadKeyPBValue(symbol_key, st)) {
     return false;
@@ -570,9 +731,9 @@ std::vector<Location> Project::QuerySymbolDefinition(
     const std::string &symbol) const {
   std::vector<Location> locations;
 
-  DB_SymbolInfo db_info;
-  if (!GetSymbolDBInfo(symbol, db_info)) {
-    LOG_ERROR << "GetSymbolDBInfo failed, project=" << name_
+  DB_SymbolDefinitionInfo db_info;
+  if (!GetSymbolDefinitionInfo(symbol, db_info)) {
+    LOG_ERROR << "GetSymbolDefinitionInfo failed, project=" << name_
               << " symbol=" << symbol;
     return locations;
   }
@@ -591,8 +752,8 @@ std::vector<Location> Project::QuerySymbolDefinition(
 // one if there's none.
 Location Project::QuerySymbolDefinition(const std::string &symbol,
                                         const fspath &abs_path) const {
-  DB_SymbolInfo db_info;
-  if (!GetSymbolDBInfo(symbol, db_info)) {
+  DB_SymbolDefinitionInfo db_info;
+  if (!GetSymbolDefinitionInfo(symbol, db_info)) {
     return Location{};
   }
 
@@ -616,19 +777,31 @@ std::string Project::MakeFileInfoKey(const fspath &file_path) const {
   return symutil::str_join(kSymdbKeyDelimeter, "file", "info", file_path);
 }
 
-std::string Project::MakeFileSymbolKey(const fspath &file_path) const {
+std::string Project::MakeFileSymbolDefineKey(const fspath &file_path) const {
   if (file_path.is_absolute()) {
-    return MakeFileSymbolKey(filesystem::relative(file_path, home_path_));
+    return MakeFileSymbolDefineKey(filesystem::relative(file_path, home_path_));
   }
 
-  return symutil::str_join(kSymdbKeyDelimeter, "file", "symbol", file_path);
+  return symutil::str_join(kSymdbKeyDelimeter, "file", "symdef", file_path);
 }
 
-std::string Project::MakeSymbolKey(const std::string &symbol_name) const {
-  return symutil::str_join(kSymdbKeyDelimeter, "symbol", symbol_name);
+std::string Project::MakeFileSymbolReferKey(const fspath &file_path) const {
+  if (file_path.is_absolute()) {
+    return MakeFileSymbolDefineKey(filesystem::relative(file_path, home_path_));
+  }
+
+  return symutil::str_join(kSymdbKeyDelimeter, "file", "symref", file_path);
 }
 
-Location Project::GetSymbolLocation(const DB_SymbolInfo &st,
+std::string Project::MakeSymbolDefineKey(const std::string &symbol_name) const {
+  return symutil::str_join(kSymdbKeyDelimeter, "symdef", symbol_name);
+}
+
+std::string Project::MakeSymbolReferKey(const std::string &symbol_name) const {
+  return symutil::str_join(kSymdbKeyDelimeter, "symref", symbol_name);
+}
+
+Location Project::GetSymbolLocation(const DB_SymbolDefinitionInfo &st,
                                     const fspath &file_path) const {
   std::string module_name = GetModuleName(file_path);
   if (module_name.empty()) {
@@ -909,40 +1082,95 @@ void Project::DeleteUnexistFile(const fspath &deleted_path) {
 
   batch.DeleteFile(deleted_path);
 
-  std::string module_name = GetModuleName(deleted_path);
+  DeleteFileDefinedSymbolInfo(relative_path, batch);
+  DeleteFileReferredSymbolInfo(relative_path, batch);
 
-  SymbolMap old_symbols;
-  std::string file_symbol_key = MakeFileSymbolKey(deleted_path);
+  batch.WriteSrcPath();
+}
+
+void Project::DeleteFileDefinedSymbolInfo(const fspath &relative_path,
+                                          BatchWriter &writer) const {
+  std::string file_symbol_key = MakeFileSymbolDefineKey(relative_path);
 
   DB_FileSymbolInfo db_fs_info;
   if (!LoadKeyPBValue(file_symbol_key, db_fs_info)) {
     LOG_ERROR << "file symbol info not exist, proj=" << name_
-              << ", path=" << deleted_path;
+              << ", path=" << relative_path;
     return;
   }
 
+  std::string module_name = GetModuleName(relative_path);
   for (const auto &symbol : db_fs_info.symbols()) {
-    DB_SymbolInfo db_info;
-    if (!GetSymbolDBInfo(symbol, db_info)) {
-      LOG_ERROR << "GetSymbolDBInfo failed, project=" << name_
+    DB_SymbolDefinitionInfo db_info;
+    if (!GetSymbolDefinitionInfo(symbol, db_info)) {
+      LOG_ERROR << "GetSymbolDefinitionInfo failed, project=" << name_
                 << " symbol=" << symbol;
       continue;
     }
 
     RemoveSymbolLocation(db_info, module_name);
-    batch.PutSymbol(symbol, db_info);
+    writer.PutSymbol(symbol, db_info);
   }
+}
 
-  batch.Delete(file_symbol_key);
+void Project::DeleteFileReferredSymbolInfo(const fspath &relative_path,
+                                           BatchWriter &writer) const {
+  std::string file_symbol_key = MakeFileSymbolReferKey(relative_path);
 
-  batch.WriteSrcPath();
+  FileSymbolReferenceMap old_symbols;
+  (void)LoadFileReferredSymbolInfo(relative_path, old_symbols);
+
+  for (const auto &kvp : old_symbols) {
+    SymbolReferenceLocationMap sym_locs;
+    const auto &sym_name = kvp.first.first;
+    const auto &mod_name = kvp.first.second;
+    if (!LoadSymbolReferenceInfo(sym_name, sym_locs)) {
+      continue;
+    }
+    auto it = sym_locs.find(mod_name);
+    if (it == sym_locs.end()) {
+      continue;
+    }
+
+    if (!it->second.erase(relative_path)) {
+      continue;
+    }
+
+    auto symbol_key = MakeSymbolReferKey(sym_name);
+    if (it->second.empty()) {
+      sym_locs.erase(it);
+      if (sym_locs.empty()) {
+        writer.Delete(symbol_key);
+        continue;
+      }
+    }
+
+    DB_SymbolReferenceInfo db_info;
+    db_info.mutable_items()->Reserve(sym_locs.size());
+    for (const auto &kvp : sym_locs) {
+      auto *item = db_info.add_items();
+      item->set_module_name(kvp.first);
+      item->mutable_path_locs()->Reserve(kvp.second.size());
+      for (const auto &kvp2 : kvp.second) {
+        auto *path_loc = item->add_path_locs();
+        path_loc->set_path(kvp2.first.string());
+        path_loc->mutable_locations()->Reserve(kvp2.second.size());
+        for (const auto &loc : kvp2.second) {
+          auto *pb_loc = path_loc->add_locations();
+          pb_loc->set_line(loc.first);
+          pb_loc->set_column(loc.second);
+        }
+      }
+    }
+    writer.Put(symbol_key, db_info);
+  }
 }
 
 bool Project::IsWatchFdInList(int file_wd) const {
   return watchers_.find(file_wd) != watchers_.end();
 }
 
-void Project::AddSymbolLocation(DB_SymbolInfo &db_info,
+void Project::AddSymbolLocation(DB_SymbolDefinitionInfo &db_info,
                                 const std::string &module_name,
                                 const Location &location) {
   assert(location.IsValid());
@@ -951,17 +1179,17 @@ void Project::AddSymbolLocation(DB_SymbolInfo &db_info,
   for (auto it = locations->begin(); it != locations->end(); ++it) {
     auto pb_module_name = GetModuleName(it->path());
     if (module_name == pb_module_name) {
-      location.Seriaize(*it);
+      location.Serialize(*it);
       return;
     }
   }
 
   auto *pb_loc = db_info.add_locations();
-  location.Seriaize(*pb_loc);
+  location.Serialize(*pb_loc);
 }
 
-bool Project::RemoveSymbolLocation(DB_SymbolInfo &db_info,
-                                   const std::string &module_name) {
+bool Project::RemoveSymbolLocation(DB_SymbolDefinitionInfo &db_info,
+                                   const std::string &module_name) const {
   auto locations = db_info.mutable_locations();
   for (auto it = locations->begin(); it != locations->end(); ++it) {
     auto pb_module_name = GetModuleName(it->path());
@@ -979,6 +1207,15 @@ bool Project::IsFileExcluded(const fspath &path) const {
     return true;
   }
   return config_->IsFileExcluded(path);
+}
+
+void Project::RestoreConfig() {
+  if (config_) {
+    THROW_AT_FILE_LINE("project<%s> config is alreday set", name_.c_str());
+  }
+  config_ = std::make_shared<ProjectConfig>(name_.c_str(), home_path_.string());
+  config_->is_enable_file_watch(true);
+  config_->UseDefaultBuildPath();
 }
 
 }  // namespace symdb

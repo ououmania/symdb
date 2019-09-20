@@ -81,6 +81,23 @@ bool ProjectConfig::IsFileExcluded(const fspath &path) const {
   return ConfigInst.IsFileExcluded(path);
 }
 
+void ProjectConfig::UseDefaultBuildPath() {
+  for (const std::string &dir : {"build", "_build"}) {
+    fspath build_path = home_path_ / dir;
+    try {
+      if (filesystem::exists(build_path)) {
+        LOG_DEBUG << "project=" << name_ << " build_path=" << build_path;
+        build_path_.swap(build_path);
+        break;
+      }
+    } catch (const std::exception &) {
+    }
+  }
+
+  THROW_AT_FILE_LINE("project<%s> home<%s> no default build path",
+                     name_.c_str(), home_path_.c_str());
+}
+
 void Config::Init(const std::string &xml_file) {
   pugi::xml_document doc;
   pugi::xml_parse_result result = doc.load_file(xml_file.c_str());

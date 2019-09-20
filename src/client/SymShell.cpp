@@ -76,6 +76,8 @@ public:
     helper(args, gen_seq<MaxArgc>{});
   }
 
+  const std::string& usage() const { return usage_; }
+
 private:
   std::string usage_;
   FuncType func_;
@@ -148,11 +150,14 @@ void SymShell::Init(boost::asio::io_service &io_context,
                              &Session::get_symbol_definition});
 
   sym_cmd["reference"].SetHandler(
-      CommandDelegator<2>{"symbol reference <proj_name> <symbol> [path]",
-                          &Session::get_symbol_references});
+      CommandDelegator<2, 3>{"symbol reference <proj_name> <symbol> [path]",
+                             &Session::get_symbol_references});
 
   root_cmd_["file"]["symbols"].SetHandler(CommandDelegator<2>{
-      "file symbols <proj_name>", &Session::list_file_symbols});
+      "file symbols <proj_name> <path>", &Session::list_file_symbols});
+
+  root_cmd_["file"]["refer"].SetHandler(CommandDelegator<2>{
+      "file refer <proj_name> <path>", &Session::list_file_references});
 
   history_file_ = history_file;
 
