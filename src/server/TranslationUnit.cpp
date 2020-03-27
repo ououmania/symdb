@@ -256,10 +256,10 @@ bool TranslationUnit::IsWantedReferenceDef(CXCursor cursor) {
     // We don't ignore private methods.
     case CXCursorKind::CXCursor_CXXMethod:
     case CXCursorKind::CXCursor_Constructor:
+    case CXCursorKind::CXCursor_FunctionDecl:
       return true;
 
     case CXCursorKind::CXCursor_EnumConstantDecl:
-    case CXCursorKind::CXCursor_FunctionDecl:
     case CXCursorKind::CXCursor_VarDecl:
     case CXCursorKind::CXCursor_StructDecl:
     case CXCursorKind::CXCursor_ClassDecl:

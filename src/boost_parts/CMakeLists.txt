@@ -28,14 +28,14 @@ macro(add_boost_lib target src_dir)
     list(APPEND LOCAL_BOOST_LIBRARIES ${target})
 endmacro(add_boost_lib)
 
-add_boost_lib(boost_filesystem ${CMAKE_CURRENT_SOURCE_DIR}/libs/filesystem)
 add_boost_lib(boost_log ${CMAKE_CURRENT_SOURCE_DIR}/libs/log)
+add_boost_lib(boost_filesystem ${CMAKE_CURRENT_SOURCE_DIR}/libs/filesystem)
 add_boost_lib(boost_system ${CMAKE_CURRENT_SOURCE_DIR}/libs/system)
 add_boost_lib(boost_thread ${CMAKE_CURRENT_SOURCE_DIR}/libs/thread)
 add_boost_lib(boost_regex ${CMAKE_CURRENT_SOURCE_DIR}/libs/regex)
 
-set(BOOST_LIBRARIES ${LOCAL_BOOST_LIBRARIES} PARENT_SCOPE)
-
 target_compile_options(boost_log PRIVATE -march=native -msse3 -mavx2)
 target_compile_definitions(boost_log PRIVATE _XOPEN_SOURCE=600)
+
+set(BOOST_LIBRARIES ${LOCAL_BOOST_LIBRARIES} PARENT_SCOPE)
 

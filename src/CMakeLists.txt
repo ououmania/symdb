@@ -21,6 +21,7 @@ else()
     find_package(Boost COMPONENTS system log filesystem)
 endif()
 
+message (STATUS ${CMAKE_INSTALL_PREFIX})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJ_BUILD_DIR})
 include_directories(${BOOST_INCLUDE_DIRS})

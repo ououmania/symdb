@@ -5,6 +5,7 @@
 #include <boost/log/expressions.hpp>
 #include <boost/log/sinks/sync_frontend.hpp>
 #include <boost/log/sinks/text_ostream_backend.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
@@ -70,11 +71,13 @@ void BoostLogger::Init(LogLevel level, const std::string& log_file) {
   console_sink->set_filter(severity >= LogLevel::STATUS);
   console_sink->locked_backend()->auto_flush(true);
 
-  using text_sink = sinks::synchronous_sink<sinks::text_ostream_backend>;
+  using text_sink = sinks::synchronous_sink<sinks::text_file_backend>;
 
-  auto stream = boost::make_shared<std::ofstream>(log_file, std::ios::app);
-  auto sink = boost::make_shared<text_sink>();
-  sink->locked_backend()->add_stream(stream);
+  auto sink = boost::make_shared<text_sink>(
+    keywords::file_name = log_file,
+    keywords::open_mode = std::ios_base::out | std::ios::app,
+    keywords::time_based_rotation = sinks::file::rotation_at_time_interval(boost::posix_time::hours(24 * 10))
+  );
   sink->locked_backend()->auto_flush(true);
   sink->set_filter(severity >= level);
   sink->set_formatter(&my_formatter);

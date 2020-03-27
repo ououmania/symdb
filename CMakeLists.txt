@@ -10,6 +10,12 @@ option(USE_SYSTEM_BOOST "Use pre-installed boost" OFF)
 
 cmake_policy(SET CMP0077 NEW)
 
+if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set (CMAKE_INSTALL_PREFIX "$ENV{HOME}/local/" CACHE PATH "default install path" FORCE )
+endif()
+
+message (STATUS ${CMAKE_INSTALL_PREFIX})
+
 include(cmake/protobuf.cmake)
 include(cmake/snappy.cmake)
 include(cmake/leveldb.cmake)
