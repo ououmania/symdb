@@ -1,5 +1,5 @@
 #include <getopt.h>
-#include <stdio.h>
+#include <unistd.h>
 #include <cstdlib>
 #include "Config.h"
 #include "Server.h"
@@ -23,18 +23,18 @@ int main(int argc, char *argv[]) {
     }
 
     switch (c) {
-    case 0:
-      break;
+      case 0:
+        break;
 
-    case 'c':
-      config_file = optarg;
-      break;
+      case 'c':
+        config_file = optarg;
+        break;
 
-    case '?':
-      break;
+      case '?':
+        break;
 
-    default:
-      abort();
+      default:
+        abort();
     }
   }
 
@@ -44,11 +44,20 @@ int main(int argc, char *argv[]) {
     ::exit(EXIT_FAILURE);
   }
 
+  if (daemon_flag) {
+    daemon(0, 0);
+  }
+
   ::unlink(ConfigInst.listen_path().c_str());
 
-  LOG_DEBUG << "program boots up";
-
-  ServerInst.Run(ConfigInst.listen_path());
+  try {
+    LOG_DEBUG << "program boots up";
+    ServerInst.Run(ConfigInst.listen_path());
+  } catch (const std::exception &e) {
+    LOG_ERROR << "exception: " << e.what();
+  } catch (...) {
+    LOG_ERROR << "unknown exception";
+  }
 
   return 0;
 }

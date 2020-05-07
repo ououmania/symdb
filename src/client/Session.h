@@ -42,6 +42,8 @@ public:
   void list_file_references(const std::string &proj_name,
                             const std::string &path);
 
+  void rebuild_file(const std::string &proj_name, const std::string &path);
+
 private:
   bool send(int msg_id, const google::protobuf::Message &body);
 

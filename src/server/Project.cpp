@@ -293,6 +293,30 @@ void Project::Build() {
   }
 }
 
+void Project::RebuildFile(const fspath &abs_path) {
+  assert(filesystem::exists(abs_path));
+
+  fspath relative_path = filesystem::relative(abs_path, home_path_);
+  if (in_parsing_files_.find(relative_path) != in_parsing_files_.end()) {
+    return;
+  }
+
+  {
+    BatchWriter batch{this};
+    batch.DeleteFile(relative_path);
+    DeleteFileDefinedSymbolInfo(relative_path, batch);
+    DeleteFileReferredSymbolInfo(relative_path, batch);
+  }
+
+  SmartCXIndex cx_index{clang_createIndex(1, 0), clang_disposeIndex};
+  try {
+    BuildFile(cx_index, abs_path);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "BuildFile error=" << e.what() << " project=" << name_
+              << " path=" << abs_path;
+  }
+}
+
 void Project::BuildFile(SmartCXIndex cx_index, const fspath &abs_path) {
   fspath relative_path = filesystem::relative(abs_path, home_path_);
   if (in_parsing_files_.find(relative_path) != in_parsing_files_.end()) {
@@ -787,7 +811,7 @@ std::string Project::MakeFileSymbolDefineKey(const fspath &file_path) const {
 
 std::string Project::MakeFileSymbolReferKey(const fspath &file_path) const {
   if (file_path.is_absolute()) {
-    return MakeFileSymbolDefineKey(filesystem::relative(file_path, home_path_));
+    return MakeFileSymbolReferKey(filesystem::relative(file_path, home_path_));
   }
 
   return symutil::str_join(kSymdbKeyDelimeter, "file", "symref", file_path);
@@ -1059,7 +1083,7 @@ void Project::SmartSync() {
       BuildFile(cx_index, path);
     } catch (const std::exception &e) {
       LOG_ERROR << "BuildFile error=" << e.what() << " project=" << name_
-                << " path" << path;
+                << " path=" << path;
     }
   }
 

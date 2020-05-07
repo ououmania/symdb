@@ -28,6 +28,8 @@ struct MessageID {
     LIST_FILE_REFERENCES_RSP,
     LIST_PROJECT_FILES_REQ,
     LIST_PROJECT_FILES_RSP,
+    REBUILD_FILE_REQ,
+    REBUILD_FILE_RSP,
     MAX_MESSAGE_ID,
   };
 };
@@ -46,7 +48,7 @@ static const std::string kErrorProjHomeNotExist = "project home not exists";
 static const std::string kErrorInvalidProjName =
     "invalid project name: only lower letters and underscore alllowed";
 static const std::string kErrorProjectNotFound = "project not found";
-static const std::string kErrorFileNotFound = "symbol not found";
+static const std::string kErrorFileNotFound = "file not found";
 static const std::string kErrorSymbolNotFound = "symbol not found";
 
 }  // namespace symdb

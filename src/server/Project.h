@@ -72,6 +72,8 @@ public:
 
   void Build();
 
+  void RebuildFile(const fspath &abs_path);
+
   void ChangeHome(const fspath &new_home);
 
   void HandleEntryCreate(int wd, bool is_dir, const std::string &path);

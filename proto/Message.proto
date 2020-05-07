@@ -100,3 +100,12 @@ message ListFileReferencesRsp {
     repeated PB_FileSymbol symbols = 2;
 }
 
+message RebuildFileReq {
+    string proj_name = 1;
+    string relative_path = 2;
+}
+
+message RebuildFileRsp {
+    string error = 1;
+}
+

@@ -20,7 +20,7 @@ public:
   ~ResponseGuard() {
     MessageHead head;
     head.set_msg_id(msg_id_);
-    head.set_body_size(resp_.ByteSize());
+    head.set_body_size(resp_.ByteSizeLong());
     session_->do_write(head, resp_);
   }
 
@@ -77,8 +77,8 @@ void Session::handle_read_body(const boost::system::error_code &err) {
 void Session::do_write(const google::protobuf::Message &head_pb,
                        const google::protobuf::Message &msg_pb) {
   FixedHeader fh;
-  fh.pb_head_size = head_pb.ByteSize();
-  fh.msg_size = fh.pb_head_size + msg_pb.ByteSize();
+  fh.pb_head_size = head_pb.ByteSizeLong();
+  fh.msg_size = fh.pb_head_size + msg_pb.ByteSizeLong();
 
   std::ostream os(&reply_);
   os.write(reinterpret_cast<char *>(&fh), sizeof(fh));
@@ -143,6 +143,10 @@ void Session::handle_message(const uint8_t *buffer, size_t length) {
 
     case MessageID::LIST_FILE_REFERENCES_REQ:
       list_file_references(body_buffer, body_length);
+      break;
+
+    case MessageID::REBUILD_FILE_REQ:
+      rebuild_file(body_buffer, body_length);
       break;
 
     default:
@@ -393,6 +397,30 @@ void Session::list_file_references(const uint8_t *buffer, size_t length) {
       }
     }
   }
+}
+
+void Session::rebuild_file(const uint8_t *buffer, size_t length) {
+  CHECK_PARSE_MESSAGE(RebuildFileReq, buffer, length);
+
+  LOG_DEBUG << "project=" << msg.proj_name()
+            << ", rel_path=" << msg.relative_path();
+
+  ResponseGuard<RebuildFileRsp> rsp(this, MessageID::REBUILD_FILE_RSP);
+  ProjectPtr project = ServerInst.GetProject(msg.proj_name());
+  if (!project) {
+    LOG_ERROR << kErrorProjectNotFound << ", project=" << msg.proj_name();
+    rsp->set_error(kErrorProjectNotFound);
+    return;
+  }
+
+  fspath abs_path = filesystem::absolute(msg.relative_path(), project->home_path());
+  if (!filesystem::exists(abs_path)) {
+    LOG_ERROR << kErrorFileNotFound << ", project=" << msg.proj_name();
+    rsp->set_error(kErrorFileNotFound);
+    return;
+  }
+
+  project->RebuildFile(abs_path);
 }
 
 }  // namespace symdb

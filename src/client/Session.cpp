@@ -114,15 +114,25 @@ void Session::list_file_references(const std::string &proj_name,
   send_and_recv(MessageID::LIST_FILE_REFERENCES_REQ, req, rsp);
 }
 
+void Session::rebuild_file(const std::string &proj_name,
+                           const std::string &rel_path) {
+  RebuildFileReq req;
+  req.set_proj_name(proj_name);
+  req.set_relative_path(rel_path);
+
+  RebuildFileRsp rsp;
+  send_and_recv(MessageID::REBUILD_FILE_REQ, req, rsp);
+}
+
 bool Session::send(int msg_id, const google::protobuf::Message &body) {
   MessageHead head;
   head.set_msg_id(msg_id);
-  head.set_body_size(body.ByteSize());
+  head.set_body_size(body.ByteSizeLong());
 
   LOG_DEBUG << "send " << body.GetTypeName() << ": " << body.ShortDebugString();
 
   FixedHeader fh;
-  fh.pb_head_size = head.ByteSize();
+  fh.pb_head_size = head.ByteSizeLong();
   fh.msg_size = fh.pb_head_size + body.GetCachedSize();
 
   boost::asio::streambuf buf;

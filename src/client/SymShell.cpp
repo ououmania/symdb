@@ -123,6 +123,7 @@ void Command::Process(const std::string &command) {
   if (sub_cmd && sub_cmd->handler_) {
     sub_cmd->handler_(args);
   } else {
+    LOG_ERROR << "no handler for " << command;
   }
 }
 
@@ -158,6 +159,9 @@ void SymShell::Init(boost::asio::io_service &io_context,
 
   root_cmd_["file"]["refer"].SetHandler(CommandDelegator<2>{
       "file refer <proj_name> <path>", &Session::list_file_references});
+
+  root_cmd_["file"]["rebuild"].SetHandler(CommandDelegator<2>{
+      "file rebuild <proj_name> <path>", &Session::rebuild_file});
 
   history_file_ = history_file;
 
