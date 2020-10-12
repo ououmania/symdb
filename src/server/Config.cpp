@@ -88,7 +88,7 @@ void ProjectConfig::UseDefaultBuildPath() {
       if (filesystem::exists(build_path)) {
         LOG_DEBUG << "project=" << name_ << " build_path=" << build_path;
         build_path_.swap(build_path);
-        break;
+        return;
       }
     } catch (const std::exception &) {
     }

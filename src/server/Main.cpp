@@ -1,6 +1,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <iostream>
 #include "Config.h"
 #include "Server.h"
 #include "util/Logger.h"
@@ -12,29 +13,41 @@ int main(int argc, char *argv[]) {
   static struct option long_options[] = {
       {"daemon", no_argument, &daemon_flag, 1},
       {"config", required_argument, 0, 'c'},
+      {"help", required_argument, 0, 'h'},
       {0, 0, 0, 0}
   };
 
   while (1) {
     int option_index = 0;
-    int c = getopt_long(argc, argv, "dc:", long_options, &option_index);
+    int c = getopt_long(argc, argv, "dhc:", long_options, &option_index);
     if (c == -1) {
       break;
     }
 
     switch (c) {
-      case 0:
+      case 'd':
+        daemon_flag = 1;
         break;
 
       case 'c':
         config_file = optarg;
         break;
 
+      case 'h':
+        std::cout << "symdb - start the symbol database server" << std::endl;
+        std::cout << "\t-c --config specify the config file" << std::endl;
+        std::cout << "\t-d --daemon start as daemon" << std::endl;
+        std::cout << "\t-h --help   print this help message" << std::endl;
+        exit(EXIT_SUCCESS);
+        break;
+
       case '?':
         break;
 
       default:
-        abort();
+        std::cerr << "unknown option " << c << std::endl;
+        ::exit(EXIT_FAILURE);
+        break;
     }
   }
 

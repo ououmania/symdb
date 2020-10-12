@@ -438,6 +438,10 @@ void Project::ClangParseFile(SmartCXIndex cx_index, fspath home_path,
 
 void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
                                 CompiledFileInfo info) {
+  if (relative_path.is_absolute()) {
+    relative_path = filesystem::relative(relative_path, home_path_);
+  }
+
   BatchWriter writer{this};
 
   DB_FileBasicInfo file_table;
@@ -453,7 +457,6 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
 void Project::WriteFileDefinitions(TranslationUnitPtr tu, fspath relative_path,
                                    BatchWriter &writer) {
   const auto &new_symbols = tu->defined_symbols();
-
   LOG_INFO << "project=" << name_ << " file=" << relative_path
            << " symbols=" << new_symbols.size();
 
