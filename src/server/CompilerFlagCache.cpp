@@ -110,7 +110,7 @@ public:
   }
 
 private:
-  JsonNodeType &node_;
+  const JsonNodeType &node_;
   fspath filepath_;
 };
 

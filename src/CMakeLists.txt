@@ -2,6 +2,8 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
+set( CMAKE_CXX_STANDARD 14 )
+
 function(add_symbol_executable target)
     file(GLOB_RECURSE SRC_FILES RELATIVE
                       ${CMAKE_CURRENT_SOURCE_DIR}

@@ -8,6 +8,14 @@ set (CMAKE_CXX_STANDARD 11)
 option(USE_SYSTEM_PROTOBUF "Use pre-installed protobuf" OFF)
 option(USE_SYSTEM_BOOST "Use pre-installed boost" OFF)
 
+if ("${CLANG_ROOT}" STREQUAL "")
+    find_package(Clang REQUIRED)
+    message(STATUS "Clang include dir: ${CLANG_INCLUDE_DIRS}")
+    include_directories(${CLANG_INCLUDE_DIRS})
+else()
+    include_directories(${CLANG_ROOT}/include)
+endif()
+
 cmake_policy(SET CMP0077 NEW)
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

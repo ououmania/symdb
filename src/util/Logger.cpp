@@ -73,10 +73,14 @@ void BoostLogger::Init(LogLevel level, const std::string& log_file) {
 
   using text_sink = sinks::synchronous_sink<sinks::text_file_backend>;
 
+  auto log_dir = boost::filesystem::path(log_file).parent_path();
+  auto log_pattern = log_dir / "file_%Y%m%d.%N.log";
   auto sink = boost::make_shared<text_sink>(
-    keywords::file_name = log_file,
+    keywords::target = log_dir,
+    keywords::file_name = log_pattern,
     keywords::open_mode = std::ios_base::out | std::ios::app,
-    keywords::time_based_rotation = sinks::file::rotation_at_time_interval(boost::posix_time::hours(24 * 10))
+    keywords::rotation_size = 256 << 20, // 256M
+    keywords::time_based_rotation = sinks::file::rotation_at_time_interval(boost::posix_time::hours(24 * 5))
   );
   sink->locked_backend()->auto_flush(true);
   sink->set_filter(severity >= level);
