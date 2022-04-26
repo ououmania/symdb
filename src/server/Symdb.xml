@@ -20,10 +20,6 @@
             <BuildDir>{PROJECT_HOME}/_build</BuildDir>
             <ExcludeEntry pattern="{PROJECT_HOME}/test/.*" />
             <ExcludeEntry pattern="{PROJECT_HOME}/tools/.*" />
-            <ExcludeEntry pattern="{PROJECT_HOME}/dedicated/.*" />
-            <ExcludeEntry pattern="{PROJECT_HOME}/cell_app/.*" />
-            <ExcludeEntry pattern="{PROJECT_HOME}/base_app/.*" />
-            <ExcludeEntry pattern="{PROJECT_HOME}/app_mgr/.*" />
         </Project>
         <Project>
             <Name>symdb</Name>
