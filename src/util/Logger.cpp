@@ -80,6 +80,7 @@ void BoostLogger::Init(LogLevel level, const std::string& log_file) {
     keywords::file_name = log_pattern,
     keywords::open_mode = std::ios_base::out | std::ios::app,
     keywords::rotation_size = 256 << 20, // 256M
+    keywords::max_files = 3,
     keywords::time_based_rotation = sinks::file::rotation_at_time_interval(boost::posix_time::hours(24 * 5))
   );
   sink->locked_backend()->auto_flush(true);

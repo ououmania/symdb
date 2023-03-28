@@ -10,7 +10,7 @@
 
     <GlobalExcluded>
         <!--Exclude all protobuf generated files -->
-        <ExcludeEntry pattern=".*\.pb\.(cc|h)$" />
+        <ExcludeEntry pattern=".*\.(pb|generated)\.(cc|h)$" />
         <ExcludeEntry pattern=".*/_?build/.*" />
     </GlobalExcluded>
     <Projects>

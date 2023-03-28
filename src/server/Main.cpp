@@ -1,4 +1,5 @@
 #include <getopt.h>
+#include <signal.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <iostream>
@@ -14,8 +15,7 @@ int main(int argc, char *argv[]) {
       {"daemon", no_argument, &daemon_flag, 1},
       {"config", required_argument, 0, 'c'},
       {"help", required_argument, 0, 'h'},
-      {0, 0, 0, 0}
-  };
+      {0, 0, 0, 0}};
 
   while (1) {
     int option_index = 0;
@@ -62,6 +62,10 @@ int main(int argc, char *argv[]) {
   }
 
   ::unlink(ConfigInst.listen_path().c_str());
+
+  sigset_t mask;
+  sigfillset(&mask);
+  sigprocmask(SIG_SETMASK, &mask, NULL);
 
   try {
     LOG_DEBUG << "program boots up";
