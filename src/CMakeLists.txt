@@ -2,6 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
+# boost log failed to compile under c++20
 set( CMAKE_CXX_STANDARD 14 )
 
 function(add_symbol_executable target)

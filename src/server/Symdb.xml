@@ -16,7 +16,7 @@
     <Projects>
         <Project>
             <Name>top_server</Name>
-            <Home>${WX_SRC_DIR}</Home>
+            <Home>${ACM_SRC_DIR}</Home>
             <BuildDir>{PROJECT_HOME}/_build</BuildDir>
             <ExcludeEntry pattern="{PROJECT_HOME}/test/.*" />
             <ExcludeEntry pattern="{PROJECT_HOME}/tools/.*" />

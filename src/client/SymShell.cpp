@@ -245,13 +245,13 @@ void SymShell::ReadLineHandler(char *line) {
   } else {
     if (*line) {
       add_history(line);
-      SymShell::Instance().ProcessCommad(line);
+      SymShell::Instance().ProcessCommand(line);
     }
     free(line);
   }
 }
 
-void SymShell::ProcessCommad(const char *cmd) {
+void SymShell::ProcessCommand(const char *cmd) {
   LOG_DEBUG << "cmd: " << cmd;
   try {
     root_cmd_.Process(cmd);

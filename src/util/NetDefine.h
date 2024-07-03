@@ -44,9 +44,9 @@ struct FixedHeader {
 static const std::string kDefaultSockPath = "/tmp/symdb.sock";
 static constexpr uint32_t kMaxNetErrorSize = 1024;
 
-static const std::string kErrorProjHomeNotExist = "project home not exists";
+static const std::string kErrorProjHomeNotExist = "project home doesn't exist";
 static const std::string kErrorInvalidProjName =
-    "invalid project name: only lower letters and underscore alllowed";
+    "invalid project name: only lower letters and underscore allowed";
 static const std::string kErrorProjectNotFound = "project not found";
 static const std::string kErrorFileNotFound = "file not found";
 static const std::string kErrorSymbolNotFound = "symbol not found";

@@ -41,7 +41,7 @@ public:
 
   void WaitInput();
 
-  void ProcessCommad(const char* cmd);
+  void ProcessCommand(const char* cmd);
 
   static SymShell& Instance() {
     static SymShell symshell;

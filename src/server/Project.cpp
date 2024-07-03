@@ -1,4 +1,5 @@
 #include "Project.h"
+#include <assert.h>
 #include <leveldb/write_batch.h>
 #include <sys/inotify.h>
 #include <boost/date_time.hpp>
@@ -15,7 +16,7 @@
 
 namespace symdb {
 
-const char *kSymdbKeyDelimeter{":"};
+const char *kSymdbKeyDelimiter{":"};
 const std::string kSymdbProjectHomeKey = "home";
 
 class BatchWriter {
@@ -219,7 +220,7 @@ void Project::AddFileWatch(const fspath &path) {
     watchers_[watcher->fd()] = std::move(watcher);
     LOG_INFO << "project=" << name_ << " watch_path=" << path;
   } catch (const std::exception &e) {
-    LOG_ERROR << "excpetion: " << e.what() << " project=" << name_
+    LOG_ERROR << "exception: " << e.what() << " project=" << name_
               << " watch_path=" << path;
   }
 }
@@ -376,7 +377,7 @@ void Project::ChangeHomeNoCheck(fspath &&new_path) {
   cmake_file_path_.swap(cmake_file_path);
 
   // Although it may take some seconds and block the main thread, we think
-  // it's acceptable. It's compilcated to post the task to the workers.
+  // it's acceptable. It's complicated to post the task to the workers.
   ForceSync();
 }
 
@@ -801,7 +802,7 @@ std::string Project::MakeFileInfoKey(const fspath &file_path) const {
     return MakeFileInfoKey(filesystem::relative(file_path, home_path_));
   }
 
-  return symutil::str_join(kSymdbKeyDelimeter, "file", "info", file_path);
+  return symutil::str_join(kSymdbKeyDelimiter, "file", "info", file_path);
 }
 
 std::string Project::MakeFileSymbolDefineKey(const fspath &file_path) const {
@@ -809,7 +810,7 @@ std::string Project::MakeFileSymbolDefineKey(const fspath &file_path) const {
     return MakeFileSymbolDefineKey(filesystem::relative(file_path, home_path_));
   }
 
-  return symutil::str_join(kSymdbKeyDelimeter, "file", "symdef", file_path);
+  return symutil::str_join(kSymdbKeyDelimiter, "file", "symdef", file_path);
 }
 
 std::string Project::MakeFileSymbolReferKey(const fspath &file_path) const {
@@ -817,15 +818,15 @@ std::string Project::MakeFileSymbolReferKey(const fspath &file_path) const {
     return MakeFileSymbolReferKey(filesystem::relative(file_path, home_path_));
   }
 
-  return symutil::str_join(kSymdbKeyDelimeter, "file", "symref", file_path);
+  return symutil::str_join(kSymdbKeyDelimiter, "file", "symref", file_path);
 }
 
 std::string Project::MakeSymbolDefineKey(const std::string &symbol_name) const {
-  return symutil::str_join(kSymdbKeyDelimeter, "symdef", symbol_name);
+  return symutil::str_join(kSymdbKeyDelimiter, "symdef", symbol_name);
 }
 
 std::string Project::MakeSymbolReferKey(const std::string &symbol_name) const {
-  return symutil::str_join(kSymdbKeyDelimeter, "symref", symbol_name);
+  return symutil::str_join(kSymdbKeyDelimiter, "symref", symbol_name);
 }
 
 Location Project::GetSymbolLocation(const DB_SymbolDefinitionInfo &st,
@@ -995,7 +996,7 @@ void Project::HandleWatchedDirDeleted(int wd, const std::string &path) {
   LOG_DEBUG << "project=" << name_ << " wd=" << wd << " path=" << fs_path;
 
   // inotify emits file-delete event before the directory is deleted. So
-  // we know the files under this directory is alreday removed from both
+  // we know the files under this directory is already removed from both
   // abs_src_paths_ and the database.
   if (!flag_cache_.TryRemoveDir(fs_path)) {
     LOG_ERROR << "delete from flag cache failed, project=" << name_
@@ -1238,7 +1239,7 @@ bool Project::IsFileExcluded(const fspath &path) const {
 
 void Project::RestoreConfig() {
   if (config_) {
-    THROW_AT_FILE_LINE("project<%s> config is alreday set", name_.c_str());
+    THROW_AT_FILE_LINE("project<%s> config is already set", name_.c_str());
   }
   config_ = std::make_shared<ProjectConfig>(name_.c_str(), home_path_.string());
   config_->is_enable_file_watch(true);

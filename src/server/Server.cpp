@@ -1,9 +1,14 @@
 #include "Server.h"
+
+#include <errno.h>
 #include <sys/inotify.h>
 #include <boost/filesystem.hpp>
+#include <string>
+
 #include "Config.h"
 #include "Project.h"
 #include "Session.h"
+#include "TypeAlias.h"
 #include "util/Exceptions.h"
 #include "util/Logger.h"
 
@@ -23,7 +28,7 @@ void Server::Run(const std::string &listen_path) {
 
   idle_work_.reset(new AsioWorkPtr::element_type{worker_io_service_});
 
-  for (std::size_t i = 0; i < boost::thread::hardware_concurrency(); ++i) {
+  for (size_t i = 0; i < boost::thread::hardware_concurrency(); ++i) {
     worker_threads_.create_thread(
         boost::bind(&asio::io_service::run, &worker_io_service_));
   }

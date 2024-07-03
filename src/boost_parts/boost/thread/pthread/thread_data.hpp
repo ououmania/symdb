@@ -32,6 +32,9 @@
 # endif
 #endif
 
+#undef PTHREAD_STACK_MIN
+#define PTHREAD_STACK_MIN 16384
+
 #include <pthread.h>
 #include <unistd.h>
 

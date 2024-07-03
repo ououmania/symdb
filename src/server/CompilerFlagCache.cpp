@@ -248,12 +248,12 @@ StringVecPtr CompilerFlagCache::GetModuleCompilerFlags(
 }
 
 StringVecPtr CompilerFlagCache::GetFileCompilerFlags(const fspath &path) {
-  std::string module = GetModuleName(path);
-  if (module.empty()) {
+  std::string name = GetModuleName(path);
+  if (name.empty()) {
     return StringVecPtr{};
   }
 
-  return GetModuleCompilerFlags(module);
+  return GetModuleCompilerFlags(name);
 }
 
 std::string CompilerFlagCache::GetModuleName(const fspath &path) const {
