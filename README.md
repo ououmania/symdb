@@ -29,6 +29,12 @@ Otherwise, you can specify clang's root directory:
 `cmake -S . -B build CLANG_ROOT=/path/to/clang/root`
 
 ## Run
+symdb needs a compilation database to parse the compilation flags of translation
+units. For projects using cmake, just add the following line to your top-level
+CMakeLists.txt:
+```
+set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
+```
 You need to do a little configuration before running the server. Please refer to
 src/server/Symdb.xml.
 ```

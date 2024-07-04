@@ -1,3 +1,4 @@
+# Necessary for symdb to analyze our project.
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
 function(add_symbol_executable target)
