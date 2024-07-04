@@ -40,6 +40,8 @@ include(cmake/leveldb.cmake)
 include(cmake/pugixml.cmake)
 
 include_directories(${PROTOBUF_INCLUDE_DIR})
+# FIXME: no better way to find the abseil include directory
+include_directories(${PROJECT_SOURCE_DIR}/third_party/protobuf/third_party/abseil-cpp/)
 
 add_subdirectory(proto)
 add_subdirectory(src)
