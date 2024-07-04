@@ -74,7 +74,11 @@ private:
 
   asio::io_service main_io_service_;
   asio::io_service worker_io_service_;
+#if __cplusplus >= 202002L
+  std::vector<std::jthread> worker_threads_;
+#else // __cplusplus >= 202002L
   std::vector<std::thread> worker_threads_;
+#endif // __cplusplus >= 202002L
   std::thread::id main_thread_id_;
   AsioWorkPtr idle_work_;
   std::unique_ptr<Listener> listener_;

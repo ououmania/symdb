@@ -2,14 +2,10 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 
 file(GLOB_RECURSE SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
-message(STATUS "${SRC_FILES}")
-
 if (USE_BOOST_LOG)
     list(REMOVE_ITEM SRC_FILES "SpdLogger.cpp")
 else()
     list(REMOVE_ITEM SRC_FILES "BoostLogger.cpp")
 endif()
-
-message(STATUS "${SRC_FILES}")
 
 add_library( symutil STATIC ${SRC_FILES} )

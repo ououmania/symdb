@@ -1,5 +1,3 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
-
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
 function(add_symbol_executable target)

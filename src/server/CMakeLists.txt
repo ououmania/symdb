@@ -5,7 +5,7 @@ set(TARGET symdb)
 find_library(Clang_LIBRARY NAMES clang)
 
 add_symbol_executable(${TARGET}
-                      ${Clang_LIBRARY} 
+                      ${Clang_LIBRARY}
                       ${LEVELDB_LIBRARY}
                       ${SNAPPY_LIBRARY}
                       ${PUGIXML_LIBRARY} )
@@ -21,4 +21,3 @@ add_dependencies( ${TARGET} copy_symdb_config )
 
 INSTALL(TARGETS ${TARGET} DESTINATION bin)
 INSTALL(FILES ${symdb_config_file} DESTINATION bin)
-

@@ -11,12 +11,12 @@ consistent with YCM.
 A compiler with at least C++14 is required. C++20 support is better. We will
 switch to some boost modules such as filesystem if no c++20 available. But
 remember it's a headache to make any dependency on the boost libraries.
-libclang and llvm are required to parse the c++ source files. readline is used
-by symcli to interact with the server for troubleshooting. They can be installed
-from the distribution repos. For example, run the following commands under
+libclang is required to parse the c++ source files. readline is used by symcli
+to interact with the server for troubleshooting. They can be installed from the
+distribution repos. For example, run the following commands under
 centos:
 ```
-yum install -y clang-devel llvm-devel readline-devel
+yum install -y clang-devel readline-devel
 ```
 Alternatively, you can install them on your own.
 ### Build

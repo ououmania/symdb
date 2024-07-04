@@ -83,7 +83,7 @@ CXChildVisitResult TranslationUnit::VisitCursor(CXCursor cursor,
     CXType cursorType = clang_getCursorType(cursor);
     CXCursorKind cursorKind = clang_getCursorKind(cursor);
 
-    LineColPair lcp(location.line_number(), location.column_number());
+    LineColPair lcp{location.line_number(), location.column_number()};
     if (cursorKind == CXCursor_MacroExpansion) {
       unit->macro_expansions_.insert(lcp);
       break;
