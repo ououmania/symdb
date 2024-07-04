@@ -2,13 +2,12 @@
 
 #include <errno.h>
 #include <sys/inotify.h>
-#include <boost/filesystem.hpp>
 #include <string>
 
 #include "Config.h"
 #include "Project.h"
 #include "Session.h"
-#include "TypeAlias.h"
+#include "util/TypeAlias.h"
 #include "util/Exceptions.h"
 #include "util/Logger.h"
 
@@ -17,20 +16,19 @@ namespace symdb {
 Server::~Server() {
   idle_work_.reset();
   worker_io_service_.stop();
-  worker_threads_.join_all();
   main_io_service_.stop();
 }
 
 void Server::Run(const std::string &listen_path) {
-  main_thread_id_ = boost::this_thread::get_id();
+  main_thread_id_ = std::this_thread::get_id();
 
   listener_.reset(new Listener{main_io_service_, listen_path});
 
+  // To keep the main io_service alive
   idle_work_.reset(new AsioWorkPtr::element_type{worker_io_service_});
 
-  for (size_t i = 0; i < boost::thread::hardware_concurrency(); ++i) {
-    worker_threads_.create_thread(
-        boost::bind(&asio::io_service::run, &worker_io_service_));
+  for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
+    worker_threads_.emplace_back([this]() { worker_io_service_.run(); });
   }
 
   int inotify_fd = inotify_init1(IN_NONBLOCK);
@@ -57,19 +55,18 @@ void Server::Run(const std::string &listen_path) {
   main_io_service_.run();
 }
 
-ProjectPtr Server::GetProject(const std::string &proj_name) {
-  auto it = projects_.find(proj_name);
+ProjectPtr Server::GetProject(const std::string &name) {
+  auto it = projects_.find(name);
   if (it != projects_.end()) {
     return it->second;
   }
 
   try {
-    ProjectPtr project = Project::CreateFromDatabase(proj_name);
-    AddProject(proj_name, project);
+    ProjectPtr project = Project::CreateFromDatabase(name);
+    AddProject(name, project);
     return project;
   } catch (const std::exception &e) {
-    LOG_ERROR << "load project failed, proj_name=" << proj_name
-              << ", error=" << e.what();
+    LOG_ERROR << "load project failed, name=" << name << ", error=" << e.what();
   }
 
   return ProjectPtr{};
@@ -79,8 +76,8 @@ ProjectPtr Server::CreateProject(const std::string &proj_name,
                                  const std::string &home_dir) {
   auto it = projects_.find(proj_name);
   if (it != projects_.end()) {
-    boost::filesystem::path home_path{home_dir};
-    if (boost::filesystem::equivalent(it->second->home_path(), home_path)) {
+    filesystem::path home_path{home_dir};
+    if (filesystem::equivalent(it->second->home_path(), home_path)) {
       return it->second;
     }
     THROW_AT_FILE_LINE("project<%s> with home<%s> already exists",

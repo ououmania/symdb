@@ -1,12 +1,13 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include <boost/thread.hpp>
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
+#include <vector>
 #include "Listener.h"
-#include "TypeAlias.h"
+#include "util/TypeAlias.h"
 #include "util/Singleton.h"
 
 struct inotify_event;
@@ -47,7 +48,7 @@ public:
   }
 
   bool IsInMainThread() const {
-    return boost::this_thread::get_id() == main_thread_id_;
+    return std::this_thread::get_id() == main_thread_id_;
   }
 
   static bool IsServerRunning(const std::string &listen_path);
@@ -73,8 +74,8 @@ private:
 
   asio::io_service main_io_service_;
   asio::io_service worker_io_service_;
-  boost::thread_group worker_threads_;
-  boost::thread::id main_thread_id_;
+  std::vector<std::thread> worker_threads_;
+  std::thread::id main_thread_id_;
   AsioWorkPtr idle_work_;
   std::unique_ptr<Listener> listener_;
   ProjectMap projects_;

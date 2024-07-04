@@ -2,9 +2,6 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
-# boost log failed to compile under c++20
-set( CMAKE_CXX_STANDARD 14 )
-
 function(add_symbol_executable target)
     file(GLOB_RECURSE SRC_FILES RELATIVE
                       ${CMAKE_CURRENT_SOURCE_DIR}
@@ -24,7 +21,7 @@ else()
     find_package(Boost COMPONENTS system log filesystem)
 endif()
 
-message (STATUS ${CMAKE_INSTALL_PREFIX})
+message (STATUS "installed to ${CMAKE_INSTALL_PREFIX}")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJ_BUILD_DIR})
 include_directories(${BOOST_INCLUDE_DIRS})

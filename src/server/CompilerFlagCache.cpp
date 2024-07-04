@@ -258,7 +258,7 @@ StringVecPtr CompilerFlagCache::GetFileCompilerFlags(const fspath &path) {
 
 std::string CompilerFlagCache::GetModuleName(const fspath &path) const {
   if (!path.is_absolute()) {
-    fspath abs_path = filesystem::absolute(path, project_->home_path());
+    fspath abs_path = symutil::absolute_path(path, project_->home_path());
     return GetModuleName(abs_path);
   }
 

@@ -183,7 +183,7 @@ FsPathSet Project::GetWatchDirs() {
     if (rdi->path().is_absolute()) {
       abs_path = rdi->path();
     } else {
-      abs_path = filesystem::absolute(rdi->path(), home_path_);
+      abs_path = symutil::absolute_path(rdi->path(), home_path_);
     }
 
     if (!filesystem::is_directory(abs_path)) {
@@ -387,7 +387,7 @@ void Project::ClangParseFile(SmartCXIndex cx_index, fspath home_path,
 
   int64_t last_mtime = 0;
   try {
-    last_mtime = symdb::last_wtime(abs_path);
+    last_mtime = symutil::last_wtime(abs_path);
   } catch (const std::exception &e) {
     LOG_ERROR << "exception=" << e.what() << ", project=" << name_
               << ", path=" << abs_path;
@@ -440,7 +440,7 @@ void Project::ClangParseFile(SmartCXIndex cx_index, fspath home_path,
 void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
                                 CompiledFileInfo info) {
   if (relative_path.is_absolute()) {
-    relative_path = filesystem::relative(relative_path, home_path_);
+    relative_path = symutil::absolute_path(relative_path, home_path_);
   }
 
   BatchWriter writer{this};
@@ -635,7 +635,7 @@ void Project::WriteFileReferences(TranslationUnitPtr tu, fspath relative_path,
 void Project::RemoveParsingFile(fspath relative_path) {
   assert(ServerInst.IsInMainThread());
 
-  fspath abs_path = filesystem::absolute(relative_path, home_path_);
+  fspath abs_path = symutil::absolute_path(relative_path, home_path_);
   if (in_parsing_files_.erase(relative_path) == 0) {
     LOG_INFO << "path is not in built, project=" << name_
              << " path=" << relative_path;
@@ -670,7 +670,7 @@ bool Project::LoadProjectInfo() {
 
   for (const auto &rel_path : db_info.rel_paths()) {
     LOG_DEBUG << "relative source file: " << rel_path;
-    abs_src_paths_.insert(filesystem::absolute(rel_path, home_path_));
+    abs_src_paths_.insert(symutil::absolute_path(rel_path, home_path_));
   }
 
   ChangeHomeNoCheck(home_dir);
@@ -769,7 +769,7 @@ std::vector<Location> Project::QuerySymbolDefinition(
   locations.reserve(db_info.locations_size());
   for (const auto &pb_loc : db_info.locations()) {
     fspath rel_path(pb_loc.path());
-    fspath abs_path = filesystem::absolute(rel_path, home_path_);
+    fspath abs_path = symutil::absolute_path(rel_path, home_path_);
     locations.emplace_back(abs_path.string(), pb_loc.line(), pb_loc.column());
   }
 
@@ -845,7 +845,7 @@ Location Project::GetSymbolLocation(const DB_SymbolDefinitionInfo &st,
     }
     if (module_name == pb_module_name) {
       fspath rel_path(pb_loc.path());
-      fspath abs_path = filesystem::absolute(rel_path, home_path_);
+      fspath abs_path = symutil::absolute_path(rel_path, home_path_);
       return Location{abs_path.string(), pb_loc.line(), pb_loc.column()};
     }
   }
@@ -896,7 +896,7 @@ bool Project::PutSingleKey(const std::string &key, const std::string &value) {
 
 std::string Project::GetModuleName(const fspath &path) const {
   if (!path.is_absolute()) {
-    fspath abs_path = filesystem::absolute(path, home_path_);
+    fspath abs_path = symutil::absolute_path(path, home_path_);
     return GetModuleName(abs_path);
   }
 

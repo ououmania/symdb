@@ -15,10 +15,8 @@ namespace symdb {
 #define VAR_WITH_LINE(a, b) a##b
 #define VAR_WITH_LINE_(a, b) VAR_WITH_LINE(a, b)
 #define SPD_LOGGER_VAR VAR_WITH_LINE_(spdlogger, __LINE__)
-#define SPD_LOGGER_VAR_DEF(_level)           \
-  symdb::SpdLogger SPD_LOGGER_VAR {       \
-    _level, __FILE__, __LINE__, __FUNCTION__ \
-  }
+#define SPD_LOGGER_VAR_DEF(_level) \
+  symdb::SpdLogger SPD_LOGGER_VAR { _level, __FILE__, __LINE__, __FUNCTION__ }
 
 spdlog::level::level_enum LogLevelToSpdLevel(LogLevel level);
 void InitLogger(LogLevel level, const std::string &log_file);
@@ -76,7 +74,9 @@ private:
 
 }  // namespace symdb
 
-#define LOG_DEBUG                         \
+// These macroes defined with boost-log have been used heavily. Just make life
+// easy for the switch.
+#define LOG_DEBUG                             \
   SPD_LOGGER_VAR_DEF(symdb::LogLevel::DEBUG); \
   SPD_LOGGER_VAR
 #define LOG_INFO                             \

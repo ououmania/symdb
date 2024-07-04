@@ -1,6 +1,5 @@
 #include "Session.h"
 #include <google/protobuf/message.h>
-#include <boost/filesystem.hpp>
 #include "proto/Message.pb.h"
 #include "util/Logger.h"
 #include "util/NetDefine.h"

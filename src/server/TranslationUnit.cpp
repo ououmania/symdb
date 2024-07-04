@@ -1,7 +1,7 @@
 #include "TranslationUnit.h"
 #include <iostream>
 #include "ClangUtils.h"
-#include "TypeAlias.h"
+#include "util/TypeAlias.h"
 #include "util/Logger.h"
 
 namespace symdb {

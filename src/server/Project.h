@@ -11,7 +11,7 @@
 #include <vector>
 #include "CompilerFlagCache.h"
 #include "TranslationUnit.h"
-#include "TypeAlias.h"
+#include "util/TypeAlias.h"
 
 namespace symdb {
 

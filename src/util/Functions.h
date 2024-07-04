@@ -1,16 +1,12 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/filesystem.hpp>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
-#include <string>
-#if __GNU_C__ >= 5
 #include <regex>
-#else
-#include <boost/regex.hpp>
-#endif
+#include <string>
+#include "TypeAlias.h"
 
 namespace symutil {
 
@@ -26,7 +22,7 @@ private:
 
 inline const std::string &to_string(const std::string &s) { return s; }
 inline std::string to_string(const char *s) { return std::string(s); }
-inline std::string to_string(const boost::filesystem::path &path) {
+inline std::string to_string(const fspath &path) {
   return path.string();
 }
 
@@ -48,8 +44,7 @@ inline std::string str_join(const char *delim, Arg1 &&arg1, Args &&... args) {
   return to_string(arg1) + delim + str_join(delim, std::forward<Args>(args)...);
 }
 
-inline bool path_has_prefix(const boost::filesystem::path &path,
-                            const boost::filesystem::path &prefix) {
+inline bool path_has_prefix(const fspath &path, const fspath &prefix) {
   const std::string &path_str = path.string();
   const std::string &prefix_str = prefix.string();
 
@@ -69,7 +64,6 @@ inline void replace_string(std::string &dest, const std::string &from,
 }
 
 // wordexp requires glibc and expands too much.
-#if __GNU_C__ >= 5
 inline std::string expand_env(std::string text) {
   static const std::regex env_re{R"--(\$\{([^}]+)\})--"};
   std::smatch match;
@@ -80,16 +74,5 @@ inline std::string expand_env(std::string text) {
   }
   return text;
 }
-#else
-inline std::string matchToEnv(const boost::smatch& match) {
-  const char *s = getenv(match[1].str().c_str());
-  return s == NULL ? std::string("") : std::string(s);
-}
-
-inline std::string expand_env(std::string text) {
-  static const boost::regex env_re { "\\$\\{([^}]+)\\}" };
-  return boost::regex_replace(text, env_re, matchToEnv);
-}
-#endif
 
 }  // namespace symutil

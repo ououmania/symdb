@@ -3,7 +3,7 @@
 
 #include <list>
 #include <string>
-#include "TypeAlias.h"
+#include "util/TypeAlias.h"
 
 namespace symdb {
 

@@ -11,13 +11,12 @@
 #include <filesystem>
 #endif // USE_BOOST_FILESYSTEM
 
+#include <chrono>
 #include <memory>
 #include <set>
 #include <string>
 #include <type_traits>
 #include <vector>
-
-namespace symdb {
 
 using AsioStream = boost::asio::posix::stream_descriptor;
 using AsioStreamPtr = std::unique_ptr<boost::asio::posix::stream_descriptor>;
@@ -33,27 +32,44 @@ using UniqueRawPointerWrap =
 
 #if USE_BOOST_FILESYSTEM
 namespace filesystem = boost::filesystem;
+using fspath = filesystem::path;
+#else // USE_BOOST_FILESYSTEM
+namespace filesystem = std::filesystem;
+using fspath = filesystem::path;
+inline std::ostream &operator<<(std::ostream &osm, const filesystem::path &path) {
+  return osm << path.string();
+}
+#endif // USE_BOOST_FILESYSTEM
+
+using FsPathVec = std::vector<fspath>;
+using FsPathSet = std::set<fspath>;
+
+namespace symutil {
+#if USE_BOOST_FILESYSTEM
+inline fspath absolute_path(const fspath &p, const fspath &base) {
+  if (p.is_absolute()) {
+    return p;
+  }
+  return filesystem::absolute(p, base);
+}
+
 inline time_t last_wtime(const filesystem::path &path) {
   return filesystem::last_write_time(path);
 }
-
 #else // USE_BOOST_FILESYSTEM
-namespace filesystem = std::filesystem;
-inline time_t last_wtime(const filesystem::path &path) {
-  using std::chrono;
-  const auto ftime = filesystem::last_write_time(path);
-  const auto system_time = clock_cast<system_clock>(ftime);
-  return system_clock::to_time_t(system_time);
+inline fspath absolute_path(const fspath &p, const fspath &base) {
+  if (p.is_absolute()) {
+    return p;
+  }
+  return filesystem::canonical(base / p);
 }
 
-inline std::ostream &operator<<(std::ostream &osm, const filesystem::path &path) {
-  return osm << path.string();
+inline time_t last_wtime(const filesystem::path &path) {
+  const auto ftime = filesystem::last_write_time(path);
+  const auto system_time = std::chrono::file_clock::to_sys(ftime);
+  return std::chrono::system_clock::to_time_t(system_time);
 }
 
 #endif // USE_BOOST_FILESYSTEM
 
-using fspath = filesystem::path;
-using FsPathVec = std::vector<fspath>;
-using FsPathSet = std::set<fspath>;
-
-}  // namespace symdb
+} // namespace symutil

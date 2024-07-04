@@ -4,10 +4,10 @@
 #include <boost/bind.hpp>
 #include "Project.h"
 #include "Server.h"
-#include "TypeAlias.h"
 #include "proto/Message.pb.h"
 #include "util/Logger.h"
 #include "util/NetDefine.h"
+#include "util/TypeAlias.h"
 
 namespace symdb {
 
@@ -413,7 +413,8 @@ void Session::rebuild_file(const uint8_t *buffer, size_t length) {
     return;
   }
 
-  fspath abs_path = filesystem::absolute(msg.relative_path(), project->home_path());
+  fspath abs_path =
+      symutil::absolute_path(msg.relative_path(), project->home_path());
   if (!filesystem::exists(abs_path)) {
     LOG_ERROR << kErrorFileNotFound << ", project=" << msg.proj_name();
     rsp->set_error(kErrorFileNotFound);

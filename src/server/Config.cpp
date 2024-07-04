@@ -2,12 +2,12 @@
 #include <cstdio>
 #include <exception>
 #include <iostream>
-#include "TypeAlias.h"
 #include "pugixml.hpp"
 #include "util/Exceptions.h"
 #include "util/Functions.h"
 #include "util/Logger.h"
 #include "util/NetDefine.h"
+#include "util/TypeAlias.h"
 
 namespace symdb {
 
@@ -51,7 +51,7 @@ void ProjectConfig::SetBuildPath(std::string path) {
   symutil::replace_string(path, "{PROJECT_HOME}", home_path_.string());
   fspath build_path{path};
   filesystem::create_directories(build_path);
-  build_path_ = filesystem::canonical(build_path, home_path_);
+  build_path_ = filesystem::canonical(symutil::absolute_path(build_path, home_path_));
   LOG_DEBUG << "project=" << name_ << " final_build_path=" << build_path_;
 }
 

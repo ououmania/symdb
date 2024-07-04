@@ -1,10 +1,10 @@
 #pragma once
 
-#include <boost/filesystem.hpp>
 #include <cstdarg>
 #include <cstdio>
+#include "TypeAlias.h"
 
-namespace symdb {
+namespace symutil {
 
 class GeneralException : public std::exception {
 public:
@@ -20,11 +20,11 @@ private:
   char buffer_[512];
 };
 
-}  // namespace symdb
+}  // namespace symutil
 
-#define THROW_AT_FILE_LINE(__fmt, ...)                                     \
-  do {                                                                     \
-    boost::filesystem::path path(__FILE__);                                \
-    throw symdb::GeneralException("%s:%d " __fmt, path.filename().c_str(), \
-                                  __LINE__, ##__VA_ARGS__);                \
+#define THROW_AT_FILE_LINE(__fmt, ...)                                       \
+  do {                                                                       \
+    fspath path(__FILE__);                                                   \
+    throw symutil::GeneralException("%s:%d " __fmt, path.filename().c_str(), \
+                                    __LINE__, ##__VA_ARGS__);                \
   } while (false)

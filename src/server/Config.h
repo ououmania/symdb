@@ -5,7 +5,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include "TypeAlias.h"
+#include "util/TypeAlias.h"
 
 namespace pugi {
 class xml_node;
