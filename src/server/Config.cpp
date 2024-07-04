@@ -122,7 +122,7 @@ void Config::Init(const std::string &xml_file) {
 
   filesystem::path log_file = filesystem::path(log_path_) / "symdb.log";
 
-  LoggerInst.Init(symdb::LogLevel::DEBUG, log_file.string());
+  symdb::InitLogger(symdb::LogLevel::DEBUG, log_file.string());
 
   InitGlobalExcludePattern(root_node);
   InitProjectsConfig(root_node);

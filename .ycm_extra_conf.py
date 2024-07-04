@@ -91,6 +91,8 @@ flags = [
     "-I",
     "third_party/pugixml/src/",
     "-I",
+    "third_party/spdlog/include/",
+    "-I",
     "_build",
 ] + GCC_DEFAULT_INCS
 

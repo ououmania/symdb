@@ -29,6 +29,19 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJ_BUILD_DIR})
 include_directories(${BOOST_INCLUDE_DIRS})
 include_directories(${PUGIXML_INCLUDE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/third_party/spdlog/include)
+
+if (CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
+    string(APPEND CMAKE_CXX_FLAGS " -fmacro-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=''")
+else()
+    # 移除目标文件的.o后缀
+    set(FILEPATH "$(patsubst %.o,%,$(abspath $@))")# $@ is the name of the target being generated
+    # 移除其中的输出目录
+    set(FILEPATH "$(subst ${WX_SRC_DIR},,${FILEPATH})")
+    set(FILEPATH "$(subst ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir/,,${FILEPATH})")
+    string(APPEND CMAKE_CXX_FLAGS " -Wno-builtin-macro-redefined")
+    string(APPEND CMAKE_CXX_FLAGS " -U__FILE__ -D__FILE__='\"${FILEPATH}\"'")
+endif()
 
 add_subdirectory(util)
 add_subdirectory(server)

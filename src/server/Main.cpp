@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
   std::string config_file = "Symdb.xml";
 
   static struct option long_options[] = {
-      {"daemon", no_argument, &daemon_flag, 1},
+      {"daemon", no_argument, &daemon_flag, 0},
       {"config", required_argument, 0, 'c'},
       {"help", required_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -64,11 +64,19 @@ int main(int argc, char *argv[]) {
   ::unlink(ConfigInst.listen_path().c_str());
 
   sigset_t mask;
-  sigfillset(&mask);
-  sigprocmask(SIG_SETMASK, &mask, NULL);
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGALRM);
+  sigaddset(&mask, SIGHUP);
+  sigaddset(&mask, SIGPOLL);
+  sigaddset(&mask, SIGUSR1);
+  sigaddset(&mask, SIGUSR2);
+  if (daemon_flag) {
+    sigaddset(&mask, SIGINT);
+  }
+  sigprocmask(SIG_BLOCK, &mask, NULL);
 
   try {
-    LOG_DEBUG << "program boots up";
+    LOG_DEBUG << "server boots up";
     ServerInst.Run(ConfigInst.listen_path());
   } catch (const std::exception &e) {
     LOG_ERROR << "exception: " << e.what();
