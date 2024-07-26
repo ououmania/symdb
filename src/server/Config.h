@@ -35,6 +35,7 @@ public:
   ProjectConfig(const std::string &name, const std::string &home);
 
   void SetBuildPath(std::string path);
+  void SetCmakeFile(std::string path);
 
   void AddExcludePattern(const std::string &pattern);
   void SpecializeGlobalPattern(const std::string &pattern);
@@ -47,6 +48,7 @@ public:
   const std::string &name() const { return name_; }
   const fspath &home_path() const { return home_path_; }
   const fspath &build_path() const { return build_path_; }
+  const fspath &cmake_file() const { return cmake_file_; }
 
   void is_enable_file_watch(bool is_enabled) {
     is_enable_file_watch_ = is_enabled;
@@ -56,6 +58,10 @@ private:
   std::string name_;
   fspath home_path_;
   fspath build_path_;
+  // This value is home_path_ / CMakeLists.txt by default.
+  // But few projects don't use a top CMakeLists.txt. They refer to a cmake file
+  // in a sibling directory.
+  fspath cmake_file_;
   std::vector<RegexPattern> exclude_patterns_;
   bool is_enable_file_watch_;
 };

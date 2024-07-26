@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <string>
 #include "TypeAlias.h"
@@ -73,6 +74,20 @@ inline std::string expand_env(std::string text) {
     text.replace(from.first, from.second, std::getenv(var_name));
   }
   return text;
+}
+
+inline std::optional<fspath> get_project_dir(
+    const fspath &path, const std::string &project_file = "CMakeLists.txt") {
+  fspath dir = filesystem::is_directory(path) ? path : path.parent_path();
+  dir = filesystem::canonical(dir);
+  while (dir.root_path() != dir) {
+    fspath project_file_path = dir / project_file;
+    if (filesystem::exists(project_file_path)) {
+      return dir;
+    }
+    dir = dir.parent_path();
+  }
+  return std::nullopt;
 }
 
 }  // namespace symutil

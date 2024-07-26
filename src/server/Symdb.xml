@@ -20,12 +20,20 @@
             <BuildDir>{PROJECT_HOME}/_build</BuildDir>
             <ExcludeEntry pattern="{PROJECT_HOME}/test/.*" />
             <ExcludeEntry pattern="{PROJECT_HOME}/tools/.*" />
+            <ExcludeEntry pattern="{PROJECT_HOME}/thirdparty/.*" />
         </Project>-->
         <Project>
             <Name>symdb</Name>
             <Home>${MYGIT_DIR}/symdb</Home>
             <ExcludeEntry pattern="{PROJECT_HOME}/third_party/.*" />
             <ExcludeEntry pattern="{PROJECT_HOME}/src/boost_parts/.*" />
+        </Project>
+        <Project>
+            <Name>ngr_server</Name>
+            <ExcludeEntry pattern=".*\.(pb|generated)\.(cc|h)$" />
+            <Home>/data/home/richymeng/work/code/ngr/Server/</Home>
+            <CMakeFile>{PROJECT_HOME}/Source/CMakeLists.txt</CMakeFile>
+            <BuildDir>{PROJECT_HOME}/Source/build</BuildDir>
         </Project>
     </Projects>
 </Config>

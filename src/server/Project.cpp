@@ -144,8 +144,19 @@ ProjectPtr Project::CreateFromConfig(std::shared_ptr<ProjectConfig> config) {
 
   ProjectPtr project = std::make_shared<Project>(config->name());
   project->SetConfig(config);
-  project->InitializeLevelDB(true, false);
-  project->LoadProjectInfo();
+  fspath db_path{ConfigInst.db_path()};
+  db_path /= project->name() + ".ldb";
+  if (filesystem::exists(db_path)) {
+    project->InitializeLevelDB(false, false);
+    if (!project->LoadProjectInfo()) {
+      LOG_WARN << "rmdir " << db_path << " after loading failed";
+      filesystem::remove_all(db_path);
+    }
+  }
+  if (!filesystem::exists(db_path)) {
+      project->InitializeLevelDB(true, true);
+  }
+
   project->ChangeHome(config->home_path());
 
   return project;
@@ -362,8 +373,7 @@ void Project::ChangeHomeNoCheck(fspath &&new_path) {
                        new_path.c_str());
   }
 
-  fspath cmake_file_path = new_path / "CMakeLists.txt";
-  if (!filesystem::exists(cmake_file_path)) {
+  if (!filesystem::exists(config_->cmake_file())) {
     THROW_AT_FILE_LINE("project<%s> new_home<%s> has no CMakeLists.txt",
                        name_.c_str(), new_path.c_str());
   }
@@ -374,7 +384,6 @@ void Project::ChangeHomeNoCheck(fspath &&new_path) {
   }
 
   home_path_.swap(new_path);
-  cmake_file_path_.swap(cmake_file_path);
 
   // Although it may take some seconds and block the main thread, we think
   // it's acceptable. It's complicated to post the task to the workers.
@@ -661,7 +670,7 @@ bool Project::LoadProjectInfo() {
 
   DB_ProjectInfo db_info;
   if (!LoadKeyPBValue(name_, db_info)) {
-    THROW_AT_FILE_LINE("load project<%s> failed", name_.c_str());
+      return false;
   }
 
   LOG_DEBUG << "project=" << name_ << ", home=" << home_dir;
@@ -870,6 +879,7 @@ bool Project::LoadKeyPBValue(const std::string &key, PBType &pb) const {
   std::string value;
 
   if (!LoadKey(key, value)) {
+    LOG_ERROR << "key " << key << " doesn't exist.";
     return false;
   }
 
@@ -945,7 +955,7 @@ void Project::HandleFileModified(int wd, const std::string &path) {
     return;
   }
 
-  if (filesystem::equivalent(cmake_file_path_, fs_path)) {
+  if (filesystem::equivalent(config_->cmake_file(), fs_path)) {
     ForceSync();
   } else {
     auto ext = fs_path.extension().string();
@@ -1045,7 +1055,7 @@ void Project::ForceSync() {
   FsPathSet old_abs_paths(std::move(abs_src_paths_));
 
   try {
-    flag_cache_.Rebuild(cmake_file_path_, config_->build_path(),
+    flag_cache_.Rebuild(config_->cmake_file(), config_->build_path(),
                         abs_src_paths_);
     UpdateWatchDirs();
     for (const auto &abs_path : old_abs_paths) {
@@ -1055,6 +1065,7 @@ void Project::ForceSync() {
     }
 
     Build();
+    modified_files_.clear();
   } catch (const std::exception &e) {
     LOG_ERROR << "exception: " << e.what() << " project=" << name_;
   }

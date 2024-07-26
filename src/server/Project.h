@@ -188,7 +188,6 @@ private:
 private:
   std::string name_;
   fspath home_path_;  // it's absolute, ditto
-  fspath cmake_file_path_;
   SmartLevelDBPtr symbol_db_;
   FsPathSet abs_src_paths_;
   FsPathSet in_parsing_files_;  // relative path

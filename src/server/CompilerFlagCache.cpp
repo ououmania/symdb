@@ -189,6 +189,7 @@ void CompilerFlagCache::LoadCompileCommandsJsonFile(const fspath &build_path,
       JsonCommandParser parser{v.second};
       const auto &abs_file_path = parser.GetFileAbsPath();
       if (project_->IsFileExcluded(abs_file_path)) {
+        LOG_INFO << abs_file_path << " is excluded";
         continue;
       }
       abs_src_paths.insert(abs_file_path);
@@ -286,14 +287,20 @@ void CompilerFlagCache::ParseFileCommand(const CommandParserType &parser,
 
   // Ignore the files which are generated out of source.
   if (symutil::path_has_prefix(abs_file_path, build_path)) {
+    LOG_INFO << "ignore file " << abs_file_path;
     return;
   }
+  auto subproject_dir = symutil::get_project_dir(abs_file_path);
+  if (!subproject_dir) {
+    THROW_AT_FILE_LINE("file=%s out of cmake project", abs_file_path.c_str());
+  }
 
-  assert(symutil::path_has_prefix(abs_file_path, project_->home_path()));
+  if (!symutil::path_has_prefix(*subproject_dir, project_->home_path())) {
+    THROW_AT_FILE_LINE("file=%s project=%s not under project root",
+                       abs_file_path.c_str(), *subproject_dir);
+  }
 
-  fspath work_dir_path{parser.GetWorkDirectory()};
-
-  auto module_home = filesystem::relative(work_dir_path, build_path);
+  auto module_home = filesystem::relative(*subproject_dir, project_->home_path());
   const auto &module_name = module_home.string();
   fspath relative_dir =
       filesystem::relative(abs_file_path.parent_path(), project_->home_path());
