@@ -1,5 +1,6 @@
 #pragma once
 
+#include <execinfo.h>
 #include <algorithm>
 #include <cstdlib>
 #include <functional>
@@ -23,9 +24,7 @@ private:
 
 inline const std::string &to_string(const std::string &s) { return s; }
 inline std::string to_string(const char *s) { return std::string(s); }
-inline std::string to_string(const fspath &path) {
-  return path.string();
-}
+inline std::string to_string(const fspath &path) { return path.string(); }
 
 template <typename Arg1, typename... Args>
 inline std::string str_join(const char *delim, Arg1 &&arg1) {
@@ -38,7 +37,7 @@ inline std::string str_join(const char *delim, Arg1 &&arg1) {
 }
 
 template <typename Arg1, typename... Args>
-inline std::string str_join(const char *delim, Arg1 &&arg1, Args &&... args) {
+inline std::string str_join(const char *delim, Arg1 &&arg1, Args &&...args) {
   using std::to_string;
   using symutil::to_string;
 
@@ -90,4 +89,23 @@ inline std::optional<fspath> get_project_dir(
   return std::nullopt;
 }
 
+inline std::string get_backtrace() {
+  constexpr int kMaxFrame = 128;
+  void *buffer[kMaxFrame];
+
+  int nptrs = backtrace(buffer, kMaxFrame);
+
+  char **strings = backtrace_symbols(buffer, nptrs);
+  if (strings == NULL) {
+    return "";
+  }
+
+  std::ostringstream oss;
+  for (int j = 0; j < nptrs; j++) {
+    oss << strings[j] << "\n";
+  }
+
+  free(strings);
+  return oss.str();
+}
 }  // namespace symutil

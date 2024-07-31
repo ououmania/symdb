@@ -28,8 +28,14 @@ struct SpdLogContext {
   spdlog::level::level_enum level;
 
   spdlog::source_loc GetSourceLoc() const {
-      return spdlog::source_loc { file, line, funcname };
+    return spdlog::source_loc{file, line, funcname};
   }
+
+  bool operator==(const SpdLogContext &rhs) const {
+    return line == rhs.line && level == rhs.level &&
+           strcmp(file, rhs.file) == 0 && strcmp(funcname, rhs.funcname) == 0;
+  }
+  bool operator!=(const SpdLogContext &rhs) const { return !(*this == rhs); }
 };
 
 class SpdLogger {
@@ -37,16 +43,13 @@ public:
   explicit SpdLogger(LogLevel level, const char *file, int line,
                      const char *funcname)
       : context_{file, funcname, line, LogLevelToSpdLevel(level)} {
-    if (strcmp(file, context_.file) || line != context_.line ||
-        static_cast<int>(level) != static_cast<int>(context_.level)) {
+    if (context_ != current_context) {
       Flush();
       current_context = context_;
     }
   }
 
-  ~SpdLogger() {
-    Flush();
-  }
+  ~SpdLogger() { Flush(); }
 
   template <typename T>
   SpdLogger &operator<<(const T &t) {
@@ -55,7 +58,7 @@ public:
   }
 
   SpdLogger(const SpdLogger &) = delete;
-  SpdLogger& operator=(const SpdLogger &) = delete;
+  SpdLogger &operator=(const SpdLogger &) = delete;
 
 private:
   void Flush() {

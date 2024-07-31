@@ -1,8 +1,8 @@
-#include "Logger.h"
-#include <spdlog/spdlog.h>
+#include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
-#include <spdlog/pattern_formatter.h>
+#include <spdlog/spdlog.h>
+#include "Logger.h"
 
 namespace symdb {
 
@@ -40,4 +40,4 @@ void InitLogger(LogLevel level, const std::string& log_file) {
   spdlog::set_default_logger(new_logger);
 }
 
-} // namespace symdb
+}  // namespace symdb

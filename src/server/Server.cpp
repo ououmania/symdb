@@ -7,21 +7,22 @@
 #include "Config.h"
 #include "Project.h"
 #include "Session.h"
-#include "util/TypeAlias.h"
 #include "util/Exceptions.h"
 #include "util/Logger.h"
+#include "util/TypeAlias.h"
 
 namespace symdb {
 
 Server::~Server() {
+  projects_.clear();
   idle_work_.reset();
   worker_io_service_.stop();
   main_io_service_.stop();
 #if __cplusplus < 202002L
-  for (const auto &t: worker_threads_) {
-      t.join();
+  for (const auto &t : worker_threads_) {
+    t.join();
   }
-#endif // __cplusplus < 202002L
+#endif  // __cplusplus < 202002L
 }
 
 void Server::Run(const std::string &listen_path) {

@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 #include "Listener.h"
-#include "util/TypeAlias.h"
 #include "util/Singleton.h"
+#include "util/TypeAlias.h"
 
 struct inotify_event;
 
@@ -35,7 +35,9 @@ public:
 
   asio::io_service &main_io_service() { return main_io_service_; }
 
-  int inotify_fd() const { return inotify_stream_->native_handle(); }
+  int inotify_fd() const {
+    return inotify_stream_ ? inotify_stream_->native_handle() : -1;
+  }
 
   template <class F>
   void PostToWorker(F f) {
@@ -76,9 +78,9 @@ private:
   asio::io_service worker_io_service_;
 #if __cplusplus >= 202002L
   std::vector<std::jthread> worker_threads_;
-#else // __cplusplus >= 202002L
+#else   // __cplusplus >= 202002L
   std::vector<std::thread> worker_threads_;
-#endif // __cplusplus >= 202002L
+#endif  // __cplusplus >= 202002L
   std::thread::id main_thread_id_;
   AsioWorkPtr idle_work_;
   std::unique_ptr<Listener> listener_;

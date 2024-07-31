@@ -87,9 +87,12 @@ ProjectFileWatcher::ProjectFileWatcher(const fspath &abs_path)
 
 ProjectFileWatcher::~ProjectFileWatcher() {
   assert(fd_ >= 0);
-  int ret = inotify_rm_watch(ServerInst.inotify_fd(), fd_);
-  if (ret < 0) {
-    LOG_ERROR << "inotify_rm_watch error: " << strerror(errno);
+  int inotify_fd = ServerInst.inotify_fd();
+  if (inotify_fd >= 0) {
+    int ret = inotify_rm_watch(inotify_fd, fd_);
+    if (ret < 0) {
+      LOG_ERROR << "inotify_rm_watch error: " << strerror(errno);
+    }
   }
   ::close(fd_);
 }
@@ -154,7 +157,7 @@ ProjectPtr Project::CreateFromConfig(std::shared_ptr<ProjectConfig> config) {
     }
   }
   if (!filesystem::exists(db_path)) {
-      project->InitializeLevelDB(true, true);
+    project->InitializeLevelDB(true, true);
   }
 
   project->ChangeHome(config->home_path());
@@ -593,6 +596,7 @@ void Project::WriteFileReferences(TranslationUnitPtr tu, fspath relative_path,
 
     SymbolReferenceLocationMap sym_locs;
     if (!LoadSymbolReferenceInfo(sym_name, sym_locs)) {
+      LOG_DEBUG << "symref=" << sym_name << " not in db";
       continue;
     }
 
@@ -670,7 +674,7 @@ bool Project::LoadProjectInfo() {
 
   DB_ProjectInfo db_info;
   if (!LoadKeyPBValue(name_, db_info)) {
-      return false;
+    return false;
   }
 
   LOG_DEBUG << "project=" << name_ << ", home=" << home_dir;
@@ -679,6 +683,11 @@ bool Project::LoadProjectInfo() {
 
   for (const auto &rel_path : db_info.rel_paths()) {
     LOG_DEBUG << "relative source file: " << rel_path;
+    fspath p = home_path_ / rel_path;
+    if (!filesystem::exists(p)) {
+      LOG_DEBUG << "file doesn't exist on disk: " << rel_path;
+      continue;
+    }
     abs_src_paths_.insert(symutil::absolute_path(rel_path, home_path_));
   }
 

@@ -5,6 +5,7 @@
 #include <iostream>
 #include "Config.h"
 #include "Server.h"
+#include "util/Functions.h"
 #include "util/Logger.h"
 
 int main(int argc, char *argv[]) {
@@ -79,7 +80,7 @@ int main(int argc, char *argv[]) {
     LOG_DEBUG << "server boots up";
     ServerInst.Run(ConfigInst.listen_path());
   } catch (const std::exception &e) {
-    LOG_ERROR << "exception: " << e.what();
+    LOG_ERROR << "exception: " << e.what() << "\n" << symutil::get_backtrace();
   } catch (...) {
     LOG_ERROR << "unknown exception";
   }
