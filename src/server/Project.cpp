@@ -174,7 +174,7 @@ void Project::InitializeLevelDB(bool create_if_missing, bool error_if_exists) {
   options.create_if_missing = create_if_missing;
   options.error_if_exists = error_if_exists;
 
-  leveldb::DB *raw_ptr;
+  leveldb::DB *raw_ptr = nullptr;
   leveldb::Status status =
       leveldb::DB::Open(options, db_path.string(), &raw_ptr);
   if (!status.ok()) {
@@ -546,7 +546,7 @@ void Project::WriteFileReferences(TranslationUnitPtr tu, fspath relative_path,
     SymbolModulePair sym_mod{symbol, module_name};
     auto &loc_set = new_symbols[sym_mod];
     for (const auto &loc : kvp.second) {
-      loc_set.insert(LineColPair{loc.first, loc.second});
+      loc_set.insert({loc.first, loc.second});
       ++nr_referred;
     }
   }
@@ -731,8 +731,7 @@ bool Project::LoadFileReferredSymbolInfo(
     SymbolModulePair smp{symbol.symbol_name(), symbol.module_name()};
     auto &lcs = symbols[smp];
     for (const auto &item : symbol.locations()) {
-      LineColPair loc{item.line(), item.column()};
-      lcs.insert(loc);
+      lcs.insert({item.line(), item.column()});
     }
   }
 
@@ -754,7 +753,7 @@ bool Project::LoadSymbolReferenceInfo(
     for (const auto &path_loc : item.path_locs()) {
       auto &file_info = sym_refs[path_loc.path()];
       for (const auto &loc : path_loc.locations()) {
-        file_info.insert(LineColPair{loc.line(), loc.column()});
+        file_info.insert({loc.line(), loc.column()});
       }
     }
   }

@@ -9,14 +9,14 @@
 #include <type_traits>
 #include <unordered_set>
 #include <vector>
+#include "util/TypeAlias.h"
 #include "CompilerFlagCache.h"
 #include "TranslationUnit.h"
-#include "util/TypeAlias.h"
 
 namespace symdb {
 
 using SmartLevelDBPtr = std::unique_ptr<leveldb::DB>;
-using SmartCXIndex = RawPointerWrap<CXIndex>;
+using SmartCXIndex = ::RawPointerWrap<CXIndex>;
 using TranslationUnitPtr = std::shared_ptr<TranslationUnit>;
 using LineColPairSet = std::set<LineColPair>;
 using SymbolModulePair = std::pair<std::string, std::string>;
@@ -170,9 +170,11 @@ private:
 
   void DeleteUnexistFile(const fspath &deleted_path);
 
-  void DeleteFileDefinedSymbolInfo(const fspath &path, BatchWriter &writer) const;
+  void DeleteFileDefinedSymbolInfo(const fspath &path,
+                                   BatchWriter &writer) const;
 
-  void DeleteFileReferredSymbolInfo(const fspath &path, BatchWriter &writer) const;
+  void DeleteFileReferredSymbolInfo(const fspath &path,
+                                    BatchWriter &writer) const;
 
   void LoadCmakeCompilationInfo(const fspath &build_path);
 

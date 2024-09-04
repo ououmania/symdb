@@ -24,7 +24,7 @@ If clang is installed in the standard path, build with the following command:
 
 `cmake -S . -B build`
 
-Otherwise, you can specify clang's root directory:
+Otherwise, you need to specify clang's root directory:
 
 `cmake -S . -B build CLANG_ROOT=/path/to/clang/root`
 

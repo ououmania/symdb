@@ -89,6 +89,8 @@ flags = [
     "-I",
     "third_party/protobuf/src/",
     "-I",
+    "third_party/protobuf/third_party/abseil-cpp/",
+    "-I",
     "third_party/pugixml/src/",
     "-I",
     "third_party/spdlog/include/",
