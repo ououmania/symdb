@@ -19,7 +19,7 @@ Server::~Server() {
   worker_io_service_.stop();
   main_io_service_.stop();
 #if __cplusplus < 202002L
-  for (const auto &t : worker_threads_) {
+  for (auto &t : worker_threads_) {
     t.join();
   }
 #endif  // __cplusplus < 202002L

@@ -4,12 +4,12 @@
 
 #if USE_BOOST_FILESYSTEM
 #include <boost/filesystem.hpp>
-#else // USE_BOOST_FILESYSTEM
+#else  // USE_BOOST_FILESYSTEM
 #if __cplusplus < 201703L
 #error "std::filesystem requires c++17 or later"
-#endif // __cplusplus < 201703L
+#endif  // __cplusplus < 201703L
 #include <filesystem>
-#endif // USE_BOOST_FILESYSTEM
+#endif  // USE_BOOST_FILESYSTEM
 
 #include <chrono>
 #include <memory>
@@ -33,13 +33,14 @@ using UniqueRawPointerWrap =
 #if USE_BOOST_FILESYSTEM
 namespace filesystem = boost::filesystem;
 using fspath = filesystem::path;
-#else // USE_BOOST_FILESYSTEM
+#else  // USE_BOOST_FILESYSTEM
 namespace filesystem = std::filesystem;
 using fspath = filesystem::path;
-inline std::ostream &operator<<(std::ostream &osm, const filesystem::path &path) {
+inline std::ostream &operator<<(std::ostream &osm,
+                                const filesystem::path &path) {
   return osm << path.string();
 }
-#endif // USE_BOOST_FILESYSTEM
+#endif  // USE_BOOST_FILESYSTEM
 
 using FsPathVec = std::vector<fspath>;
 using FsPathSet = std::set<fspath>;
@@ -56,7 +57,7 @@ inline fspath absolute_path(const fspath &p, const fspath &base) {
 inline time_t last_wtime(const filesystem::path &path) {
   return filesystem::last_write_time(path);
 }
-#else // USE_BOOST_FILESYSTEM
+#else  // USE_BOOST_FILESYSTEM
 inline fspath absolute_path(const fspath &p, const fspath &base) {
   if (p.is_absolute()) {
     return p;
@@ -66,10 +67,16 @@ inline fspath absolute_path(const fspath &p, const fspath &base) {
 
 inline time_t last_wtime(const filesystem::path &path) {
   const auto ftime = filesystem::last_write_time(path);
+#if __cplusplus > 201703L
   const auto system_time = std::chrono::file_clock::to_sys(ftime);
   return std::chrono::system_clock::to_time_t(system_time);
+#else
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             ftime.time_since_epoch())
+      .count();
+#endif
 }
 
-#endif // USE_BOOST_FILESYSTEM
+#endif  // USE_BOOST_FILESYSTEM
 
-} // namespace symutil
+}  // namespace symutil

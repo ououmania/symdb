@@ -1,6 +1,11 @@
 # Necessary for symdb to analyze our project.
 set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 
+CHECK_CXX_COMPILER_FLAG("-std=c++20" COMPILER_SUPPORTS_CXX20)
+if(NOT COMPILER_SUPPORTS_CXX20)
+    set (FILESYSTEM_LIB stdc++fs)
+endif()
+
 function(add_symbol_executable target)
     file(GLOB_RECURSE SRC_FILES RELATIVE
                       ${CMAKE_CURRENT_SOURCE_DIR}
@@ -11,6 +16,9 @@ function(add_symbol_executable target)
 
     TARGET_LINK_LIBRARIES(${target} proto symutil ${BOOST_LIBRARIES}
         ${PROTOBUF_LIBRARIES} pthread ${extra_libs})
+    if(FILESYSTEM_LIB)
+        TARGET_LINK_LIBRARIES(${target} ${FILESYSTEM_LIB})
+    endif()
 endfunction(add_symbol_executable)
 
 if (NOT USE_SYSTEM_BOOST)
