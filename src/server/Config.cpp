@@ -51,7 +51,8 @@ void ProjectConfig::SetBuildPath(std::string path) {
   symutil::replace_string(path, "{PROJECT_HOME}", home_path_.string());
   fspath build_path{path};
   filesystem::create_directories(build_path);
-  build_path_ = filesystem::canonical(symutil::absolute_path(build_path, home_path_));
+  build_path_ =
+      filesystem::canonical(symutil::absolute_path(build_path, home_path_));
   LOG_DEBUG << "project=" << name_ << " final_build_path=" << build_path_;
 }
 
@@ -59,7 +60,8 @@ void ProjectConfig::SetCmakeFile(std::string path) {
   LOG_DEBUG << "project=" << name_ << " cmake_file=" << path;
   symutil::replace_string(path, "{PROJECT_HOME}", home_path_.string());
   fspath cmake_file{path};
-  cmake_file_ = filesystem::canonical(symutil::absolute_path(cmake_file, home_path_));
+  cmake_file_ =
+      filesystem::canonical(symutil::absolute_path(cmake_file, home_path_));
   if (!filesystem::exists(cmake_file_)) {
     THROW_AT_FILE_LINE("cmake file %s not exists", cmake_file_.c_str());
   }
@@ -172,7 +174,8 @@ void Config::InitProjectsConfig(const pugi::xml_node &root) {
 
     auto build_dir = child_value_or_default(node, "BuildDir", "_build");
     pc->SetBuildPath(build_dir);
-    auto cmake_file = child_value_or_default(node, "CMakeFile", "CMakeLists.txt");
+    auto cmake_file =
+        child_value_or_default(node, "CMakeFile", "CMakeLists.txt");
     pc->SetCmakeFile(cmake_file);
 
     pc->is_enable_file_watch(

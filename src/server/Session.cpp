@@ -276,9 +276,15 @@ void Session::get_symbol_definition(const uint8_t *buffer, size_t length) {
     }
   } else {
     auto locations = project->QuerySymbolDefinition(msg.symbol());
-    rsp->mutable_locations()->Reserve(locations.size());
-    for (const auto &loc : locations) {
-      loc.Serialize(*rsp->add_locations());
+    if (locations.empty()) {
+      LOG_ERROR << kErrorSymbolNotFound << ", project=" << msg.proj_name()
+                << " symbol=" << msg.symbol();
+      rsp->set_error(kErrorSymbolNotFound);
+    } else {
+      rsp->mutable_locations()->Reserve(locations.size());
+      for (const auto &loc : locations) {
+        loc.Serialize(*rsp->add_locations());
+      }
     }
   }
 }

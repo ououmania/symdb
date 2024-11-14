@@ -24,30 +24,35 @@ public:
   explicit BatchWriter(Project *proj) : project_{proj} {}
 
   template <typename PBType>
-  void Put(const std::string &key, const PBType &pb) {
-    batch_.Put(key, pb.SerializeAsString());
+  std::enable_if_t<std::is_base_of_v<google::protobuf::Message, PBType>, void>
+  Put(const std::string &key, const PBType &pb) {
+    Put(key, pb.SerializeAsString());
   }
 
   void Put(const std::string &key, const std::string &value) {
     batch_.Put(key, value);
+    ++batch_count_;
   }
 
-  void Delete(const std::string &key) { batch_.Delete(key); }
+  void Delete(const std::string &key) {
+    batch_.Delete(key);
+    ++batch_count_;
+  }
 
   template <typename PBType>
   void PutSymbol(const std::string &symbol, const PBType &pb) {
-    batch_.Put(project_->MakeSymbolDefineKey(symbol), pb.SerializeAsString());
+    Put(project_->MakeSymbolDefineKey(symbol), pb.SerializeAsString());
   }
 
   template <typename PBType>
   void PutFile(const fspath &path, const PBType &pb) {
     LOG_DEBUG << "project=" << project_->name() << ", path=" << path;
-    batch_.Put(project_->MakeFileInfoKey(path), pb.SerializeAsString());
+    Put(project_->MakeFileInfoKey(path), pb.SerializeAsString());
   }
 
   void DeleteFile(const fspath &path) {
     LOG_DEBUG << "project=" << project_->name() << ", path=" << path;
-    batch_.Delete(project_->MakeFileInfoKey(path));
+    Delete(project_->MakeFileInfoKey(path));
   }
 
   void WriteSrcPath() {
@@ -60,19 +65,27 @@ public:
     Put(project_->name_, pt);
   }
 
+  void Clear() {
+    batch_.Clear();
+    batch_count_ = 0;
+  }
+
   ~BatchWriter() {
-    leveldb::WriteOptions write_options;
-    write_options.sync = false;
-    leveldb::Status s = project_->symbol_db_->Write(write_options, &batch_);
-    if (!s.ok()) {
-      LOG_ERROR << "failed to write, error=" << s.ToString()
-                << " project=" << project_->name_;
+    if (batch_count_) {
+      leveldb::WriteOptions write_options;
+      write_options.sync = false;
+      leveldb::Status s = project_->symbol_db_->Write(write_options, &batch_);
+      if (!s.ok()) {
+        LOG_ERROR << "failed to write, error=" << s.ToString()
+                  << " project=" << project_->name_;
+      }
     }
   }
 
 private:
   Project *project_;
   leveldb::WriteBatch batch_;
+  int batch_count_ = 0;
 };
 
 ProjectFileWatcher::ProjectFileWatcher(const fspath &abs_path)
@@ -463,8 +476,14 @@ void Project::WriteCompiledFile(TranslationUnitPtr tu, fspath relative_path,
 
   writer.PutFile(relative_path, file_table);
 
-  WriteFileDefinitions(tu, relative_path, writer);
-  WriteFileReferences(tu, relative_path, writer);
+  try {
+    WriteFileDefinitions(tu, relative_path, writer);
+    WriteFileReferences(tu, relative_path, writer);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "project=" << name_ << " file=" << relative_path
+              << " error=" << e.what();
+    writer.Clear();
+  }
 }
 
 void Project::WriteFileDefinitions(TranslationUnitPtr tu, fspath relative_path,
@@ -943,7 +962,7 @@ void Project::HandleEntryCreate(int wd, bool is_dir, const std::string &path) {
   }
 
   auto ext = fs_path.extension().string();
-  if (ext == ".cc" || ext == ".cpp") {
+  if (symutil::is_cpp_source_ext(ext)) {
     abs_src_paths_.insert(fs_path);
     modified_files_.push_back(fs_path);
   }
@@ -967,7 +986,7 @@ void Project::HandleFileModified(int wd, const std::string &path) {
     ForceSync();
   } else {
     auto ext = fs_path.extension().string();
-    if (ext == ".cc" || ext == ".cpp") {
+    if (symutil::is_cpp_source_ext(ext)) {
       modified_files_.push_back(fs_path);
     }
   }

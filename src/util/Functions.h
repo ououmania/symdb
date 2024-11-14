@@ -8,6 +8,7 @@
 #include <optional>
 #include <regex>
 #include <string>
+#include <string_view>
 #include "TypeAlias.h"
 
 namespace symutil {
@@ -108,4 +109,17 @@ inline std::string get_backtrace() {
   free(strings);
   return oss.str();
 }
+
+inline bool is_cpp_source_ext(std::string_view ext) {
+  return ext == ".cc" || ext == ".cpp";
+}
+
+inline bool is_cpp_header_ext(std::string_view ext) {
+  return ext == ".h" || ext == ".hpp";
+}
+
+inline bool is_cpp_ext(std::string_view ext) {
+  return is_cpp_source_ext(ext) || is_cpp_header_ext(ext);
+}
+
 }  // namespace symutil

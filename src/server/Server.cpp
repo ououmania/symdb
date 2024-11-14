@@ -8,6 +8,7 @@
 #include "Project.h"
 #include "Session.h"
 #include "util/Exceptions.h"
+#include "util/Functions.h"
 #include "util/Logger.h"
 #include "util/TypeAlias.h"
 
@@ -141,6 +142,16 @@ void Server::HandleInotifyReadable() {
     // VIM creates the weried file 4913...
     if (!strncmp(event->name, "4913", event->len)) {
       continue;
+    }
+
+    try {
+      auto ext = fspath(event->name).extension().c_str();
+      if (!symutil::is_cpp_ext(ext)) {
+        continue;
+      }
+    } catch (const std::exception &e) {
+      LOG_ERROR << "file=" << event->name << " extension error: " << e.what();
+      return;
     }
 
     try {

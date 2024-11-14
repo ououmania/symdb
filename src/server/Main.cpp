@@ -76,14 +76,8 @@ int main(int argc, char *argv[]) {
   }
   sigprocmask(SIG_BLOCK, &mask, NULL);
 
-  try {
-    LOG_DEBUG << "server boots up";
-    ServerInst.Run(ConfigInst.listen_path());
-  } catch (const std::exception &e) {
-    LOG_ERROR << "exception: " << e.what() << "\n" << symutil::get_backtrace();
-  } catch (...) {
-    LOG_ERROR << "unknown exception";
-  }
+  LOG_DEBUG << "server boots up";
+  ServerInst.Run(ConfigInst.listen_path());
 
   return 0;
 }
