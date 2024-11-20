@@ -78,8 +78,18 @@ public:
   const std::string &db_path() const { return db_path_; }
   const std::string &listen_path() const { return listen_path_; }
   const StringVec &default_inc_dirs() const { return default_inc_dirs_; }
+  uint32_t max_workers() const { return max_workers_; }
 
   const std::vector<ProjectConfigPtr> &projects() { return projects_; };
+
+  ProjectConfigPtr GetProjectConfig(const std::string &name) const {
+    for (auto &v : projects_) {
+      if (v->name() == name) {
+        return v;
+      }
+    }
+    return ProjectConfigPtr{};
+  }
 
   static Config &Instance() {
     static Config obj;
@@ -103,6 +113,7 @@ private:
   std::vector<RegexPattern> global_excluded_patterns_;
   std::vector<std::string> global_project_patterns_;
   std::vector<ProjectConfigPtr> projects_;
+  uint32_t max_workers_ = 8;
 };
 
 }  // namespace symdb

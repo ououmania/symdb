@@ -62,7 +62,12 @@ inline fspath absolute_path(const fspath &p, const fspath &base) {
   if (p.is_absolute()) {
     return p;
   }
-  return filesystem::canonical(base / p);
+  try {
+    // The file may not exist.
+    return filesystem::canonical(base / p);
+  } catch (const std::exception &e) {
+    return base / p;
+  }
 }
 
 inline time_t last_wtime(const filesystem::path &path) {

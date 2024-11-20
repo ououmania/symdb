@@ -62,7 +62,9 @@ class Project : public std::enable_shared_from_this<Project> {
   friend class BatchWriter;
 
 public:
-  static ProjectPtr CreateFromDatabase(const std::string &name);
+  // XXX: config may be invalid
+  static ProjectPtr CreateFromDatabase(const std::string &name,
+                                       std::shared_ptr<ProjectConfig> config);
   static ProjectPtr CreateFromConfigFile(const std::string &name,
                                          const fspath &home);
   static ProjectPtr CreateFromConfig(std::shared_ptr<ProjectConfig> config);
@@ -106,8 +108,6 @@ public:
   bool IsFileExcluded(const fspath &path) const;
 
   std::string GetModuleName(const fspath &path) const;
-
-  void SetConfig(std::shared_ptr<ProjectConfig> config) { config_ = config; }
 
 private:
   void ChangeHomeNoCheck(fspath &&new_home);

@@ -119,7 +119,8 @@ Project::Project(const std::string &name)
   StartForceSyncTimer();
 }
 
-ProjectPtr Project::CreateFromDatabase(const std::string &name) {
+ProjectPtr Project::CreateFromDatabase(const std::string &name,
+                                       ProjectConfigPtr config) {
   if (name.empty()) {
     THROW_AT_FILE_LINE("empty project name");
   }
@@ -129,7 +130,6 @@ ProjectPtr Project::CreateFromDatabase(const std::string &name) {
   if (!project->LoadProjectInfo()) {
     THROW_AT_FILE_LINE("project<%s> load failed", name.c_str());
   }
-  project->RestoreConfig();
 
   return project;
 }
@@ -147,7 +147,6 @@ ProjectPtr Project::CreateFromConfigFile(const std::string &name,
   ProjectPtr project = std::make_shared<Project>(name);
   project->InitializeLevelDB(true, true);
   project->ChangeHome(home);
-  project->RestoreConfig();
 
   return project;
 }
@@ -159,7 +158,7 @@ ProjectPtr Project::CreateFromConfig(std::shared_ptr<ProjectConfig> config) {
   }
 
   ProjectPtr project = std::make_shared<Project>(config->name());
-  project->SetConfig(config);
+  project->config_ = config;
   fspath db_path{ConfigInst.db_path()};
   db_path /= project->name() + ".ldb";
   if (filesystem::exists(db_path)) {
@@ -700,6 +699,11 @@ bool Project::LoadProjectInfo() {
 
   home_path_ = fspath{home_dir};
 
+  // This project may not exist in config.
+  if (!config_) {
+    RestoreConfig();
+  }
+
   for (const auto &rel_path : db_info.rel_paths()) {
     LOG_DEBUG << "relative source file: " << rel_path;
     fspath p = home_path_ / rel_path;
@@ -764,6 +768,7 @@ bool Project::LoadSymbolReferenceInfo(
 
   DB_SymbolReferenceInfo db_info;
   if (!LoadKeyPBValue(symbol_key, db_info)) {
+    LOG_DEBUG << "symbol=" << symbol_name << " no references";
     return false;
   }
 
@@ -873,6 +878,12 @@ Location Project::GetSymbolLocation(const DB_SymbolDefinitionInfo &st,
   }
 
   for (const auto &pb_loc : st.locations()) {
+    auto abs_path = symutil::absolute_path(home_path_, pb_loc.path());
+    if (!filesystem::exists(abs_path)) {
+      LOG_WARN << "file may be deleted! project=" << name_
+               << " path=" << pb_loc.path() << " abs_path=" << abs_path;
+      continue;
+    }
     auto pb_module_name = GetModuleName(pb_loc.path());
     if (pb_module_name.empty()) {
       LOG_WARN << "pb_module_name empty, project=" << name_

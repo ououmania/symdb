@@ -34,7 +34,9 @@ void Server::Run(const std::string &listen_path) {
   // To keep the main io_service alive
   idle_work_.reset(new AsioWorkPtr::element_type{worker_io_service_});
 
-  for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
+  size_t nr_workers =
+      std::min(ConfigInst.max_workers(), std::thread::hardware_concurrency());
+  for (size_t i = 0; i < nr_workers; ++i) {
     worker_threads_.emplace_back([this]() { worker_io_service_.run(); });
   }
 
@@ -69,7 +71,8 @@ ProjectPtr Server::GetProject(const std::string &name) {
   }
 
   try {
-    ProjectPtr project = Project::CreateFromDatabase(name);
+    ProjectPtr project =
+        Project::CreateFromDatabase(name, ConfigInst.GetProjectConfig(name));
     AddProject(name, project);
     return project;
   } catch (const std::exception &e) {

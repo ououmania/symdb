@@ -71,13 +71,25 @@ int main(int argc, char *argv[]) {
   sigaddset(&mask, SIGPOLL);
   sigaddset(&mask, SIGUSR1);
   sigaddset(&mask, SIGUSR2);
+  sigaddset(&mask, SIGPIPE);
   if (daemon_flag) {
     sigaddset(&mask, SIGINT);
   }
   sigprocmask(SIG_BLOCK, &mask, NULL);
 
   LOG_DEBUG << "server boots up";
-  ServerInst.Run(ConfigInst.listen_path());
+  if (!daemon_flag) {
+    ServerInst.Run(ConfigInst.listen_path());
+  } else {
+    try {
+      ServerInst.Run(ConfigInst.listen_path());
+    } catch (const std::exception &e) {
+      LOG_ERROR << "exception: " << e.what() << "\n"
+                << symutil::get_backtrace();
+    } catch (...) {
+      LOG_ERROR << "unknown exception";
+    }
+  }
 
   return 0;
 }

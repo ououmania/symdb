@@ -124,6 +124,8 @@ void Config::Init(const std::string &xml_file) {
   db_path_ = symutil::expand_env(child_value_or_throw(root_node, "DataDir"));
   listen_path_ =
       child_value_or_default(root_node, "Listen", symdb::kDefaultSockPath);
+  max_workers_ =
+      std::stoull(child_value_or_default(root_node, "MaxWorker", "8"));
 
   auto ensure_dir_exists = [](const std::string &dir) {
     filesystem::path dir_path(dir);

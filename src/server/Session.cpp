@@ -317,6 +317,8 @@ void Session::get_symbol_references(const uint8_t *buffer, size_t length) {
             item->set_path(abs_path.string());
             item->set_line(loc.first);
             item->set_column(loc.second);
+          } else {
+            LOG_WARN << "path=" << abs_path << "not found";
           }
         } catch (const std::exception &e) {
           LOG_ERROR << "exception=" << e.what()
