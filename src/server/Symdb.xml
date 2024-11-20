@@ -31,7 +31,7 @@
         <Project>
             <Name>ngr_server</Name>
             <ExcludeEntry pattern=".*\.(pb|generated)\.(cc|h)$" />
-            <Home>${HOME}/code/ngr/Server/</Home>
+            <Home>${NGR_SERVER_DIR}</Home>
             <CMakeFile>{PROJECT_HOME}/Source/CMakeLists.txt</CMakeFile>
             <BuildDir>{PROJECT_HOME}/Source/build</BuildDir>
         </Project>
